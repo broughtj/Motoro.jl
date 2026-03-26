@@ -224,3 +224,51 @@ function price(option::EuropeanOption, engine::MonteCarlo, data::MarketData)
 
     return exp(-rate * expiry) * mean(payoffs)
 end
+
+"""
+    price(option::LookbackCall, engine::MonteCarlo, data::SVMarketData)
+
+Price a fixed-strike lookback call under stochastic volatility (Heston-style)
+using Monte Carlo with antithetic variates.
+
+Evolves two coupled SDEs per step:
+  Variance:  Vt+dt = Vt + α(V̄ - Vt)dt + ξ√Vt √dt εᵥ
+  Asset:     St+dt = St exp((r - δ - ½Vt)dt ± √(Vt dt) εₛ)
+
+Antithetic pairs (±εₛ on the asset, shared εᵥ on variance) cut
+standard error significantly with minimal extra cost.
+"""
+function price(option::LookbackCall, engine::MonteCarlo, data::SVMarketData)
+    (; strike, expiry) = option
+    (; spot, rate, vol, div, alpha, vbar, xi) = data
+    (; steps, reps) = engine
+
+    dt      = expiry / steps
+    alphadt = alpha * dt
+    xisdt   = xi * sqrt(dt)
+    disc    = exp(-rate * expiry)
+
+    sum_CT = 0.0
+
+    @inbounds for _ in 1:(reps ÷ 2)
+        St1 = spot;  St2 = spot
+        Vt  = vol^2
+        maxSt1 = spot;  maxSt2 = spot
+
+        @inbounds for _ in 1:steps
+            εV = randn()
+            εS = randn()
+            Vt    = max(Vt + alphadt * (vbar - Vt) + xisdt * sqrt(Vt) * εV, 0.0)
+            drift = (rate - div - 0.5 * Vt) * dt
+            move  = sqrt(Vt * dt) * εS
+            St1  *= exp(drift + move)
+            St2  *= exp(drift - move)
+            maxSt1 = max(maxSt1, St1)
+            maxSt2 = max(maxSt2, St2)
+        end
+
+        sum_CT += 0.5 * (max(0.0, maxSt1 - strike) + max(0.0, maxSt2 - strike))
+    end
+
+    return disc * sum_CT / (reps ÷ 2)
+end

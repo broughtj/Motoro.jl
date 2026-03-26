@@ -10,6 +10,6 @@ export payoff
 
 export Binomial, BlackScholes, MonteCarlo, asset_paths, price
 
-export MarketData
-
+export MarketData, SVMarketData
+export LookbackCall
 end # module Motoro

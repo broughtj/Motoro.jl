@@ -24,3 +24,33 @@ struct MarketData
     vol::AbstractFloat
     div::AbstractFloat
 end
+
+"""
+    SVMarketData(spot, rate, vol, div, alpha, vbar, xi)
+
+Market parameters for stochastic volatility option pricing (Heston-style).
+
+# Fields
+- `spot`: Current spot price S
+- `rate`: Risk-free interest rate r
+- `vol`: Initial volatility σ (initial variance V₀ = vol²)
+- `div`: Dividend yield δ
+- `alpha`: Mean reversion speed α of the variance process
+- `vbar`: Long-run mean variance V̄
+- `xi`: Volatility of volatility ξ
+
+# Examples
+```julia
+# S=K=100, T=1, σ=20%, r=6%, δ=3%, α=5, ξ=0.02
+data = SVMarketData(100.0, 0.06, 0.20, 0.03, 5.0, 0.04, 0.02)
+```
+"""
+struct SVMarketData
+    spot::AbstractFloat
+    rate::AbstractFloat
+    vol::AbstractFloat
+    div::AbstractFloat
+    alpha::AbstractFloat
+    vbar::AbstractFloat
+    xi::AbstractFloat
+end
