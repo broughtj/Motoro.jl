@@ -189,3 +189,14 @@ Base.broadcastable(x::AmericanPut) = Ref(x)
 function payoff(option::AmericanPut, spot)
     return max(0.0, option.strike - spot)
 end
+
+
+
+"""
+    ExoticOption
+
+Abstract base type for all exotic option contracts.
+
+"""
+abstract type ExoticOption end
+
