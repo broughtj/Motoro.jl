@@ -200,3 +200,28 @@ Abstract base type for all exotic option contracts.
 """
 abstract type ExoticOption end
 
+"""
+    LookbackCall(strike, expiry)
+
+A fixed-strike lookback call option. Payoff at expiry is `max(0, maxS - K)`,
+where `maxS` is the maximum asset price observed over the life of the option.
+
+# Fields
+- `strike`: Strike price K
+- `expiry`: Time to expiration in years
+
+# Examples
+```julia
+option = LookbackCall(100.0, 1.0)
+data   = SVMarketData(100.0, 0.06, 0.20, 0.03, 5.0, 0.04, 0.02)
+engine = MonteCarlo(52, 10_000)
+price(option, engine, data)
+```
+"""
+struct LookbackCall <: ExoticOption
+    strike::AbstractFloat
+    expiry::AbstractFloat
+end
+
+Base.broadcastable(x::LookbackCall) = Ref(x)
+
