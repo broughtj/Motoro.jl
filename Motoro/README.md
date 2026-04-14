@@ -7,14 +7,16 @@ A Julia package for teaching computational options pricing. Motoro implements th
 From the Julia REPL:
 
 ```julia
-] add https://github.com/broughtj/Motoro.jl
+using Pkg
+Pkg.add(url="https://github.com/broughtj/Motoro.jl", subdir="Motoro")
 ```
 
 Or clone the repository and activate the local environment:
 
 ```julia
-] activate .
-] instantiate
+using Pkg
+Pkg.activate("Motoro")
+Pkg.instantiate()
 ```
 
 ## Quick Start
@@ -114,6 +116,7 @@ payoff(EuropeanPut(100.0, 1.0),  110.0)   #  0.0
 ## Dependencies
 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
+- [LinearAlgebra](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/) (standard library)
 - [Statistics](https://docs.julialang.org/en/v1/stdlib/Statistics/) (standard library)
 
 ## Author
