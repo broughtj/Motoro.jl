@@ -6,6 +6,41 @@ using Random
 norm_cdf(x) = cdf(Normal(0.0, 1.0), x)
 
 """
+    PricingResult
+
+Abstract type for option pricing results.
+
+See also: [`AnalyticResult`](@ref), [`SimulationResult`](@ref)
+"""
+abstract type PricingResult end
+
+"""
+    AnalyticResult(price)
+
+Result from an analytic pricing model (e.g., [`BlackScholes`](@ref), [`Binomial`](@ref)).
+
+# Fields
+- `price::Float64`: Option price
+"""
+struct AnalyticResult <: PricingResult
+    price::Float64
+end
+
+"""
+    SimulationResult(price, std)
+
+Result from a simulation-based pricing model (e.g., [`MonteCarlo`](@ref)).
+
+# Fields
+- `price::Float64`: Estimated option price (discounted mean payoff)
+- `std::Float64`: Standard deviation of the discounted payoff across simulation paths
+"""
+struct SimulationResult <: PricingResult
+    price::Float64
+    std::Float64
+end
+
+"""
     Binomial(steps)
 
 Cox-Ross-Rubinstein (CRR) binomial tree pricing model.
@@ -57,7 +92,7 @@ function price(option::EuropeanOption, model::Binomial, data::MarketData)
         end
     end
 
-    return x[1]
+    return AnalyticResult(x[1])
 end
 
 
@@ -89,7 +124,7 @@ function price(option::AmericanOption, model::Binomial, data::MarketData)
         end
     end
 
-    return x[1]
+    return AnalyticResult(x[1])
 end
 
 """
@@ -123,9 +158,9 @@ function price(option::EuropeanCall, model::BlackScholes, data::MarketData)
     d1 = (log(spot / strike) + (rate - div + 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
     d2 = d1 - vol * sqrt(expiry)
 
-    price = spot * exp(-div * expiry) * norm_cdf(d1) - strike * exp(-rate * expiry) * norm_cdf(d2)
+    p = spot * exp(-div * expiry) * norm_cdf(d1) - strike * exp(-rate * expiry) * norm_cdf(d2)
 
-    return price
+    return AnalyticResult(p)
 end
 
 
@@ -147,9 +182,9 @@ function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
     d1 = (log(spot / strike) + (rate - div + 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
     d2 = d1 - vol * sqrt(expiry)
 
-    price = strike * exp(-rate * expiry) * norm_cdf(-d2) - spot * exp(-div * expiry) * norm_cdf(-d1)
+    p = strike * exp(-rate * expiry) * norm_cdf(-d2) - spot * exp(-div * expiry) * norm_cdf(-d1)
 
-    return price
+    return AnalyticResult(p)
 end
 
 
@@ -358,9 +393,9 @@ function price(option::EuropeanOption, model::MonteCarlo, data::MarketData)
     (; steps, reps) = model
 
     paths = asset_paths(model.method, model, spot, rate, vol, expiry)
-    payoffs = payoff.(option, paths[:, end])
+    disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
 
-    return exp(-rate * expiry) * mean(payoffs)
+    return SimulationResult(mean(disc_payoffs), std(disc_payoffs))
 end
 
 
@@ -410,6 +445,6 @@ function price(option::EuropeanOption, model::MonteCarlo, hedge::StopLoss, data:
         cost[k] = -dot(dfs, cash_flows)
     end
 
-    return mean(cost)
+    return SimulationResult(mean(cost), std(cost))
 
 end
