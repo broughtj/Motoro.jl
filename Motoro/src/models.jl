@@ -33,7 +33,7 @@ Result from a simulation-based pricing model (e.g., [`MonteCarlo`](@ref)).
 
 # Fields
 - `price::Float64`: Estimated option price (discounted mean payoff)
-- `std::Float64`: Standard deviation of the discounted payoff across simulation paths
+- `std::Float64`: Standard error of the price estimate (standard deviation of payoffs divided by √reps)
 """
 struct SimulationResult <: PricingResult
     price::Float64
@@ -164,6 +164,28 @@ function price(option::EuropeanCall, model::BlackScholes, data::MarketData)
 end
 
 
+"""
+    delta(option::EuropeanCall, model::BlackScholes, data::MarketData) -> Float64
+
+Black-Scholes-Merton delta for a European call option.
+
+Delta measures the sensitivity of the option price to a unit change in the spot price,
+i.e., `∂V/∂S`. For a call, delta is in `[0, 1]`.
+
+# Arguments
+- `option::EuropeanCall`: The call option contract
+- `model::BlackScholes`: BSM analytical model
+- `data::MarketData`: Current market parameters
+
+# Examples
+```julia
+data = MarketData(100.0, 0.05, 0.2, 0.0)
+call = EuropeanCall(100.0, 1.0)
+delta(call, BlackScholes(), data)  # ≈ 0.637
+```
+
+See also: [`price`](@ref), [`BlackScholes`](@ref)
+"""
 function delta(option::EuropeanCall, model::BlackScholes, data::MarketData)
     (; strike, expiry) = option
     (; spot, rate, vol, div) = data
@@ -188,6 +210,28 @@ function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
 end
 
 
+"""
+    delta(option::EuropeanPut, model::BlackScholes, data::MarketData) -> Float64
+
+Black-Scholes-Merton delta for a European put option.
+
+Delta measures the sensitivity of the option price to a unit change in the spot price,
+i.e., `∂V/∂S`. For a put, delta is in `[-1, 0]`.
+
+# Arguments
+- `option::EuropeanPut`: The put option contract
+- `model::BlackScholes`: BSM analytical model
+- `data::MarketData`: Current market parameters
+
+# Examples
+```julia
+data = MarketData(100.0, 0.05, 0.2, 0.0)
+put = EuropeanPut(100.0, 1.0)
+delta(put, BlackScholes(), data)  # ≈ -0.363
+```
+
+See also: [`price`](@ref), [`BlackScholes`](@ref)
+"""
 function delta(option::EuropeanPut, model::BlackScholes, data::MarketData)
     (; strike, expiry) = option
     (; spot, rate, vol, div) = data
@@ -402,11 +446,70 @@ end
 
 
 
+"""
+    StopLoss(mu)
+
+Stop-loss hedging strategy for a European option.
+
+Models a naive stop-loss hedge that holds the underlying whenever the spot price is
+at or above the strike and holds cash otherwise. The drift `mu` is used in place of
+the risk-free rate when simulating asset paths, allowing the strategy to be evaluated
+under the real-world (physical) measure.
+
+# Fields
+- `mu::Float64`: Expected drift of the underlying asset (annualized, as decimal)
+
+# Examples
+```julia
+data  = MarketData(41.0, 0.08, 0.30, 0.0)
+call  = EuropeanCall(40.0, 1.0)
+model = MonteCarlo(100, 10_000)
+hedge = StopLoss(0.10)
+
+price(call, model, hedge, data)
+```
+
+See also: [`price`](@ref), [`MonteCarlo`](@ref)
+"""
 struct StopLoss
     mu::Float64
 end
 
 
+"""
+    price(option::EuropeanOption, model::MonteCarlo, hedge::StopLoss, data::MarketData)
+
+Estimate the cost of a stop-loss hedging strategy for a European option via Monte Carlo.
+
+Simulates asset paths under the drift `hedge.mu` and tracks the cash flows of a
+stop-loss hedge: buying the underlying when the spot crosses above the strike and
+selling when it crosses below. The present value of all cash flows (including
+terminal delivery) is averaged across paths.
+
+# Arguments
+- `option::EuropeanOption`: The option contract being hedged
+- `model::MonteCarlo`: Simulation parameters (steps, reps, variance reduction method)
+- `hedge::StopLoss`: Stop-loss strategy specifying the asset drift
+- `data::MarketData`: Market parameters (spot, rate, vol, div)
+
+# Returns
+A [`SimulationResult`](@ref) with the mean hedging cost and its standard error
+(standard deviation of costs divided by √reps).
+
+# Examples
+```julia
+data  = MarketData(41.0, 0.08, 0.30, 0.0)
+call  = EuropeanCall(40.0, 1.0)
+model = MonteCarlo(100, 10_000)
+hedge = StopLoss(0.10)
+
+result = price(call, model, hedge, data)
+result.price  # mean hedge cost
+result.std    # standard error of the mean estimate
+```
+
+See also: [`StopLoss`](@ref), [`MonteCarlo`](@ref), [`SimulationResult`](@ref)
+"""
 function price(option::EuropeanOption, model::MonteCarlo, hedge::StopLoss, data::MarketData)
     (; strike, expiry) = option
     (; steps, reps, method) = model
@@ -445,6 +548,6 @@ function price(option::EuropeanOption, model::MonteCarlo, hedge::StopLoss, data:
         cost[k] = -dot(dfs, cash_flows)
     end
 
-    return SimulationResult(mean(cost), std(cost))
+    return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 
 end
