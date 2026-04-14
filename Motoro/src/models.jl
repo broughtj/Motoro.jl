@@ -195,7 +195,7 @@ Stratified sampling draws. Divides `[0,1]` into `n` equal strata and draws one
 sample per stratum, ensuring coverage of the full distribution and reducing
 variance compared to pure pseudo-random sampling.
 """
-struct Stratified   <: DrawMethod end
+struct Stratified <: DrawMethod end
 
 """
     PairingMethod
@@ -360,4 +360,55 @@ function price(option::EuropeanOption, model::MonteCarlo, data::MarketData)
     payoffs = payoff.(option, paths[:, end])
 
     return exp(-rate * expiry) * mean(payoffs)
+end
+
+
+
+
+
+struct StopLoss
+    mu::Float64
+end
+
+
+function price(option::EuropeanOption, model::MonteCarlo, hedge::StopLoss, data::MarketData)
+    (; strike, expiry) = option
+    (; steps, reps, method) = model
+    (; mu) = hedge
+    (; spot, rate, vol, div) = data
+
+    dt = expiry / steps
+    dfs = exp.(-rate * collect(0:1:steps) * dt)
+    cost = zeros(reps)
+    paths  = asset_paths(method, model, spot, mu, vol, expiry)
+
+    for k in 1:reps
+        cash_flows = zeros(steps+1)
+
+        if paths[k,1] >= strike
+            covered = 1
+            cash_flows[1] = -paths[k,1]
+        else
+            covered = 0
+        end
+
+        for t in 2:steps+1
+            if (covered == 1) & (paths[k,t] < strike)
+                covered = 0
+                cash_flows[t] = paths[k,t]
+            elseif (covered == 0) & (paths[k,t] > strike)
+                covered = 1
+                cash_flows[t] = -paths[k,t]
+            end
+        end
+
+        if paths[k, end] >= strike
+            cash_flows[end] += strike
+        end
+
+        cost[k] = -dot(dfs, cash_flows)
+    end
+
+    return mean(cost)
+
 end
