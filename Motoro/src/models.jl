@@ -127,6 +127,18 @@ function price(option::EuropeanCall, model::BlackScholes, data::MarketData)
     return price
 end
 
+
+function delta(option::EuropeanCall, model::BlackScholes, data::MarketData)
+    (; strike, expiry) = option
+    (; spot, rate, vol, div) = data
+
+    d1 = (log(spot / strike) + (rate - div + 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
+    delta = exp(-div * expiry) * norm_cdf(d1)
+
+    return delta
+end
+
+
 function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
     (; strike, expiry) = option
     (; spot, rate, vol, div) = data
@@ -139,6 +151,16 @@ function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
     return price
 end
 
+
+function delta(option::EuropeanPut, model::BlackScholes, data::MarketData)
+    (; strike, expiry) = option
+    (; spot, rate, vol, div) = data
+
+    d1 = (log(spot / strike) + (rate - div + 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
+    delta = -1.0 * exp(-div * expiry) * norm_cdf(-d1)
+
+    return delta
+end
 
 
 """
