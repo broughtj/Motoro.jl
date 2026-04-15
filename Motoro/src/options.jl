@@ -343,11 +343,11 @@ Compute the payoff of a lookback option from a simulated asset price path.
 - `FloatingPriceLookbackPut`: `max(0, K - S_min)`
 """
 function payoff(option::FloatingStrikeLookbackCall, path)
-    return path[end] - minimum(path)
+    return max(path[end] - minimum(path), 0.0)
 end
 
 function payoff(option::FloatingStrikeLookbackPut, path)
-    return maximum(path) - path[end]
+    return max(maximum(path) - path[end], 0.0)
 end
 
 function payoff(option::FloatingPriceLookbackCall, path)
