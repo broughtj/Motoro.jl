@@ -633,22 +633,6 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
 end
 
 
-# Internal helper: BSM delta at a given spot and remaining time.
-# Used inside simulation loops where spot and time vary step by step.
-function _bsm_delta(option::EuropeanCall, S, τ, data::MarketData)
-    (; rate, vol, div) = data
-    (; strike) = option
-    d1 = (log(S / strike) + (rate - div + 0.5 * vol^2) * τ) / (vol * sqrt(τ))
-    return exp(-div * τ) * cdf(Normal(), d1)
-end
-
-function _bsm_delta(option::EuropeanPut, S, τ, data::MarketData)
-    (; rate, vol, div) = data
-    (; strike) = option
-    d1 = (log(S / strike) + (rate - div + 0.5 * vol^2) * τ) / (vol * sqrt(τ))
-    return exp(-div * τ) * (cdf(Normal(), d1) - 1.0)
-end
-
 
 """
     DeltaHedge(mu) <: HedgeStrategy
@@ -728,7 +712,7 @@ function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::
 
         for j in 1:steps
             τ              = expiry - (j - 1) * dt
-            Δ              = _bsm_delta(option, path[j], τ, data)
+            Δ              = delta(EuropeanCall(option.strike, τ), BlackScholes(), MarketData(path[j], data.rate, data.vol, data.div))
             cash_flows[j]  = (position - Δ) * path[j]
             position       = Δ
         end

@@ -1,5 +1,4 @@
 using Motoro
-using Distributions
 using LinearAlgebra
 using Statistics
 using Printf
@@ -20,12 +19,6 @@ call = EuropeanCall(strike, expiry)
 
 # ── BSM reference ─────────────────────────────────────────────────────────────
 bsm_price = price(call, BlackScholes(), data).price
-
-# ── Delta helper (BSM Δ for a call at spot S, remaining time τ) ───────────────
-function call_delta(S, τ, K, r, σ, q)
-    d1 = (log(S / K) + (r - q + 0.5σ^2) * τ) / (σ * sqrt(τ))
-    return exp(-q * τ) * cdf(Normal(), d1)
-end
 
 # ── Collect raw payoffs for a given step count ────────────────────────────────
 function rn_payoffs(steps)
@@ -49,7 +42,7 @@ function dh_costs(steps)
 
         for j in 1:steps
             τ             = expiry - (j - 1) * dt
-            Δ             = call_delta(path[j], τ, strike, rate, vol, div)
+            Δ             = delta(EuropeanCall(strike, τ), BlackScholes(), MarketData(path[j], rate, vol, div))
             cash_flows[j] = (position - Δ) * path[j]
             position      = Δ
         end
