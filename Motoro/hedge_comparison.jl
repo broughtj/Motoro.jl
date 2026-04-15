@@ -1,5 +1,4 @@
 using Motoro
-using LinearAlgebra
 using Statistics
 using Printf
 using Plots
@@ -11,118 +10,82 @@ rate   = 0.05
 vol    = 0.40
 div    = 0.0
 expiry = 5/12
-mu     = 0.10        # real-world drift for delta hedge paths
-reps   = 50_000
+mu     = 0.10      # real-world drift for delta hedge paths
+
+steps  = 100       # steps per inner simulation
+reps   = 1_000     # paths per inner simulation
+trials = 2_000     # number of repeated experiments
 
 data = MarketData(spot, rate, vol, div)
 call = EuropeanCall(strike, expiry)
 
-# ── BSM reference ─────────────────────────────────────────────────────────────
 bsm_price = price(call, BlackScholes(), data).price
 
-# ── Collect raw payoffs for a given step count ────────────────────────────────
-function rn_payoffs(steps)
-    model = RiskNeutralMonteCarlo(steps, reps)
-    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
-    disc  = exp(-rate * expiry)
-    return disc .* payoff.(call, paths[:, end])
+# ── Repeated experiments ──────────────────────────────────────────────────────
+rn_estimates = zeros(trials)
+dh_estimates = zeros(trials)
+
+for i in 1:trials
+    rn_estimates[i] = price(call, RiskNeutralMonteCarlo(steps, reps), data).price
+    dh_estimates[i] = price(call, HedgedMonteCarlo(steps, reps, DeltaHedge(mu)), data).price
 end
 
-function dh_costs(steps)
-    model      = HedgedMonteCarlo(steps, reps, DeltaHedge(mu))
-    paths      = asset_paths(model.method, model, spot, mu, vol, expiry)
-    dt         = expiry / steps
-    dfs        = exp.(-rate * collect(0:steps) * dt)
-    costs      = zeros(reps)
-
-    for k in 1:reps
-        path       = paths[k, :]
-        position   = 0.0
-        cash_flows = zeros(steps + 1)
-
-        for j in 1:steps
-            τ             = expiry - (j - 1) * dt
-            Δ             = delta(EuropeanCall(strike, τ), BlackScholes(), MarketData(path[j], rate, vol, div))
-            cash_flows[j] = (position - Δ) * path[j]
-            position      = Δ
-        end
-
-        if path[end] > strike
-            cash_flows[end] = strike - (1.0 - position) * path[end]
-        else
-            cash_flows[end] = position * path[end]
-        end
-
-        costs[k] = -dot(dfs, cash_flows)
-    end
-
-    return costs
-end
-
-# ── Convergence table ─────────────────────────────────────────────────────────
-step_counts = [10, 50, 100, 500]
-
-results = [(steps, rn_payoffs(steps), dh_costs(steps)) for steps in step_counts]
+# ── Summary table ─────────────────────────────────────────────────────────────
+rn_mean, rn_std = mean(rn_estimates), std(rn_estimates)
+dh_mean, dh_std = mean(dh_estimates), std(dh_estimates)
 
 println()
-println("=" ^ 75)
-println("   Convergence: Risk-Neutral MC vs Delta Hedge MC")
-@printf("   BSM price: %.4f    reps: %d    μ: %.2f\n", bsm_price, reps, mu)
-println("=" ^ 75)
-@printf("   %-6s  %-22s  %-22s  %s\n",
-        "Steps", "Risk-Neutral MC", "Delta Hedge MC", "Var. Red.")
-@printf("   %-6s  %-10s %-10s  %-10s %-10s  %s\n",
-        "", "Mean", "Std Err", "Mean", "Std Err", "(SE ratio)")
-println("-" ^ 75)
-for (steps, rn, dh) in results
-    rn_m, rn_se = mean(rn), std(rn) / sqrt(reps)
-    dh_m, dh_se = mean(dh), std(dh) / sqrt(reps)
-    @printf("   %-6d  %-10.4f %-10.5f  %-10.4f %-10.5f  %.1fx\n",
-            steps, rn_m, rn_se, dh_m, dh_se, rn_se / dh_se)
-end
-println("-" ^ 75)
-@printf("   %-6s  %-10.4f %-10s  %-10.4f %-10s\n",
-        "BSM", bsm_price, "—", bsm_price, "—")
-println("=" ^ 75)
+println("=" ^ 65)
+println("   Sampling Distribution of the Price Estimator")
+@printf("   BSM price: %.4f   steps: %d   reps: %d   trials: %d\n",
+        bsm_price, steps, reps, trials)
+println("=" ^ 65)
+@printf("   %-26s  %8s  %8s  %8s\n", "Method", "Mean", "Std Dev", "vs BSM")
+println("-" ^ 65)
+@printf("   %-26s  %8.4f  %8s  %8s\n",  "Black-Scholes-Merton", bsm_price, "—", "—")
+@printf("   %-26s  %8.4f  %8.4f  %+8.4f\n", "Risk-Neutral MC",  rn_mean, rn_std, rn_mean - bsm_price)
+@printf("   %-26s  %8.4f  %8.4f  %+8.4f\n", "Delta Hedge MC",   dh_mean, dh_std, dh_mean - bsm_price)
+println("-" ^ 65)
+@printf("   Variance reduction: %.1fx\n", rn_std / dh_std)
+println("=" ^ 65)
 println()
 
-# ── Histograms at steps = 100 ─────────────────────────────────────────────────
-_, rn_100, dh_100 = results[findfirst(r -> r[1] == 100, results)]
+# ── Histograms ────────────────────────────────────────────────────────────────
+# Use shared x-axis limits centered on BSM price so scales are comparable
+half_range = 4 * rn_std
+xlims = (bsm_price - half_range, bsm_price + half_range)
 
-xlims_rn = (-1.0, maximum(rn_100) * 1.05)
-xlims_dh = (bsm_price - 4 * std(dh_100), bsm_price + 4 * std(dh_100))
-
-p1 = histogram(rn_100,
-    bins       = 80,
-    normalize  = :pdf,
-    color      = :steelblue,
-    alpha      = 0.7,
-    label      = "Discounted payoff",
-    xlabel     = "Value",
-    ylabel     = "Density",
-    title      = "Risk-Neutral MC  (steps=100)",
-    xlims      = xlims_rn)
+p1 = histogram(rn_estimates,
+    bins      = 60,
+    normalize = :pdf,
+    color     = :steelblue,
+    alpha     = 0.7,
+    label     = "Estimate",
+    xlabel    = "Price estimate",
+    ylabel    = "Density",
+    title     = "Risk-Neutral MC",
+    xlims     = xlims)
 vline!(p1, [bsm_price], color = :red,   lw = 2, label = "BSM price")
-vline!(p1, [mean(rn_100)], color = :black, lw = 2, ls = :dash, label = "MC mean")
+vline!(p1, [rn_mean],   color = :black, lw = 2, ls = :dash, label = "Mean")
 
-p2 = histogram(dh_100,
-    bins       = 80,
-    normalize  = :pdf,
-    color      = :darkorange,
-    alpha      = 0.7,
-    label      = "Hedge cost",
-    xlabel     = "Value",
-    ylabel     = "Density",
-    title      = "Delta Hedge MC  (steps=100)",
-    xlims      = xlims_dh)
+p2 = histogram(dh_estimates,
+    bins      = 60,
+    normalize = :pdf,
+    color     = :darkorange,
+    alpha     = 0.7,
+    label     = "Estimate",
+    xlabel    = "Price estimate",
+    ylabel    = "Density",
+    title     = "Delta Hedge MC",
+    xlims     = xlims)
 vline!(p2, [bsm_price], color = :red,   lw = 2, label = "BSM price")
-vline!(p2, [mean(dh_100)], color = :black, lw = 2, ls = :dash, label = "DH mean")
+vline!(p2, [dh_mean],   color = :black, lw = 2, ls = :dash, label = "Mean")
 
 fig = plot(p1, p2,
     layout     = (1, 2),
     size       = (950, 420),
     margin     = 5Plots.mm,
-    plot_title = "Risk-Neutral vs Delta Hedge MC  (reps=$(reps÷1_000)k, μ=$(mu))")
+    plot_title = "steps=$steps, reps=$reps, trials=$trials, μ=$mu")
 
 savefig(fig, "hedge_comparison.png")
 println("  Plot saved → hedge_comparison.png")
