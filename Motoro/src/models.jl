@@ -631,3 +631,113 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
 
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
+
+
+# Internal helper: BSM delta at a given spot and remaining time.
+# Used inside simulation loops where spot and time vary step by step.
+function _bsm_delta(option::EuropeanCall, S, τ, data::MarketData)
+    (; rate, vol, div) = data
+    (; strike) = option
+    d1 = (log(S / strike) + (rate - div + 0.5 * vol^2) * τ) / (vol * sqrt(τ))
+    return exp(-div * τ) * cdf(Normal(), d1)
+end
+
+function _bsm_delta(option::EuropeanPut, S, τ, data::MarketData)
+    (; rate, vol, div) = data
+    (; strike) = option
+    d1 = (log(S / strike) + (rate - div + 0.5 * vol^2) * τ) / (vol * sqrt(τ))
+    return exp(-div * τ) * (cdf(Normal(), d1) - 1.0)
+end
+
+
+"""
+    DeltaHedge <: HedgeStrategy
+
+Delta hedging strategy used as a control variate in Monte Carlo pricing.
+
+At each time step the BSM delta is computed and the hedge gain
+`Δ * (S_{t+dt} - S_t · e^{r·dt})` is accumulated. Adding this control variate
+to the terminal payoff reduces estimator variance substantially — typically by
+an order of magnitude compared to plain Monte Carlo — while leaving the expected
+value unchanged (the control variate has zero expectation under Q).
+
+Unlike [`StopLoss`](@ref), `DeltaHedge` simulates under the risk-neutral (Q) measure
+and requires no real-world drift parameter.
+
+# Examples
+```julia
+data  = MarketData(50.0, 0.05, 0.40, 0.0)
+call  = EuropeanCall(52.0, 5/12)
+
+price(call, HedgedMonteCarlo(100, 10_000, DeltaHedge()), data)
+```
+
+See also: [`HedgeStrategy`](@ref), [`HedgedMonteCarlo`](@ref), [`StopLoss`](@ref)
+"""
+struct DeltaHedge <: HedgeStrategy end
+
+
+"""
+    price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+
+Price a European option via Monte Carlo with a delta hedging control variate.
+
+At each time step the BSM delta is computed for the current spot and remaining
+time. The control variate `cv = Σ Δ_t · (S_{t+dt} - S_t · e^{r·dt})` has zero
+expectation under Q, so the adjusted payoff `max(0, S_T - K) - cv` has the same
+mean as the plain payoff but substantially lower variance.
+
+# Arguments
+- `option::EuropeanOption`: The option contract (call or put)
+- `model::HedgedMonteCarlo{DeltaHedge}`: Simulation model with delta hedge strategy
+- `data::MarketData`: Market parameters (spot, rate, vol, div)
+
+# Returns
+A [`SimulationResult`](@ref) with the mean discounted payoff and its standard error.
+
+# Examples
+```julia
+data = MarketData(50.0, 0.05, 0.40, 0.0)
+call = EuropeanCall(52.0, 5/12)
+
+# Compare standard vs delta-hedged Monte Carlo
+plain = price(call, RiskNeutralMonteCarlo(100, 10_000), data)
+cv    = price(call, HedgedMonteCarlo(100, 10_000, DeltaHedge()), data)
+
+plain.std / cv.std   # variance reduction ratio
+```
+
+See also: [`DeltaHedge`](@ref), [`HedgedMonteCarlo`](@ref), [`SimulationResult`](@ref)
+"""
+function price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+    (; strike, expiry) = option
+    (; steps, reps, method) = model
+    (; spot, rate, vol, div) = data
+
+    dt    = expiry / steps
+    nudt  = (rate - div - 0.5 * vol^2) * dt
+    sidt  = vol * sqrt(dt)
+    erddt = exp((rate - div) * dt)
+    df    = exp(-rate * expiry)
+
+    n = reps ÷ (method.pairing isa Antithetic ? 2 : 1)
+    CT = zeros(reps)
+
+    for j in 1:reps
+        St = spot
+        cv = 0.0
+
+        for i in 1:steps
+            τ     = expiry - (i - 1) * dt
+            Δ     = _bsm_delta(option, St, τ, data)
+            z     = randn()
+            Stn   = St * exp(nudt + sidt * z)
+            cv   += Δ * (Stn - St * erddt)
+            St    = Stn
+        end
+
+        CT[j] = payoff(option, St) - cv
+    end
+
+    return SimulationResult(mean(CT) * df, std(CT) * df / sqrt(reps))
+end

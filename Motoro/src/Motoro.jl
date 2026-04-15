@@ -21,7 +21,7 @@ export generate_draws, apply_pairing
 export PricingResult, AnalyticResult, SimulationResult
 export Binomial, BlackScholes, asset_paths, price, delta
 export MonteCarlo, RiskNeutralMonteCarlo, HedgedMonteCarlo
-export HedgeStrategy, StopLoss
+export HedgeStrategy, StopLoss, DeltaHedge
 
 export MarketData
 
