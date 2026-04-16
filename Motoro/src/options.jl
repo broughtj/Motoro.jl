@@ -202,9 +202,103 @@ end
 
 Abstract base type for all exotic option contracts.
 
-See also: [`LookbackOption`](@ref), [`ArithmeticAsianOption`](@ref)
+See also: [`BinaryOption`](@ref), [`LookbackOption`](@ref), [`ArithmeticAsianOption`](@ref)
 """
 abstract type ExoticOption end
+
+"""
+    BinaryOption <: ExoticOption
+
+Abstract type for binary (digital) options whose payoff is a fixed cash amount
+contingent on the terminal asset price relative to the strike.
+
+Unlike [`LookbackOption`](@ref) and [`ArithmeticAsianOption`](@ref), binary option
+payoffs depend only on the terminal spot price, not the full path.
+
+See also: [`CashOrNothingCall`](@ref), [`CashOrNothingPut`](@ref)
+"""
+abstract type BinaryOption <: ExoticOption end
+
+"""
+    CashOrNothingCall(strike, expiry, cash)
+
+A cash-or-nothing call that pays a fixed amount `cash` if the asset price
+finishes above `strike` at expiration, and zero otherwise.
+
+# Fields
+- `strike::AbstractFloat`: Strike price
+- `expiry::AbstractFloat`: Time to expiration in years
+- `cash::AbstractFloat`: Fixed payout if the option finishes in the money (default: 1.0)
+
+# Payoff
+`cash  if  S_T > K,  else  0`
+
+# Examples
+```julia
+opt = CashOrNothingCall(100.0, 1.0, 1.0)   # pays \$1 if S_T > 100
+```
+
+See also: [`CashOrNothingPut`](@ref), [`payoff`](@ref)
+"""
+struct CashOrNothingCall{T<:AbstractFloat} <: BinaryOption
+    strike::T
+    expiry::T
+    cash::T
+end
+
+CashOrNothingCall(strike::T, expiry::T) where {T<:AbstractFloat} =
+    CashOrNothingCall{T}(strike, expiry, one(T))
+
+Base.broadcastable(x::CashOrNothingCall) = Ref(x)
+
+"""
+    CashOrNothingPut(strike, expiry, cash)
+
+A cash-or-nothing put that pays a fixed amount `cash` if the asset price
+finishes below `strike` at expiration, and zero otherwise.
+
+# Fields
+- `strike::AbstractFloat`: Strike price
+- `expiry::AbstractFloat`: Time to expiration in years
+- `cash::AbstractFloat`: Fixed payout if the option finishes in the money (default: 1.0)
+
+# Payoff
+`cash  if  S_T < K,  else  0`
+
+# Examples
+```julia
+opt = CashOrNothingPut(100.0, 1.0, 1.0)   # pays \$1 if S_T < 100
+```
+
+See also: [`CashOrNothingCall`](@ref), [`payoff`](@ref)
+"""
+struct CashOrNothingPut{T<:AbstractFloat} <: BinaryOption
+    strike::T
+    expiry::T
+    cash::T
+end
+
+CashOrNothingPut(strike::T, expiry::T) where {T<:AbstractFloat} =
+    CashOrNothingPut{T}(strike, expiry, one(T))
+
+Base.broadcastable(x::CashOrNothingPut) = Ref(x)
+
+"""
+    payoff(option::BinaryOption, spot)
+
+Compute the payoff of a binary option at a given terminal spot price.
+
+# Returns
+- `CashOrNothingCall`: `option.cash` if `spot > option.strike`, else `0.0`
+- `CashOrNothingPut`:  `option.cash` if `spot < option.strike`, else `0.0`
+"""
+function payoff(option::CashOrNothingCall, spot)
+    return spot > option.strike ? option.cash : 0.0
+end
+
+function payoff(option::CashOrNothingPut, spot)
+    return spot < option.strike ? option.cash : 0.0
+end
 
 """
     LookbackOption <: ExoticOption
@@ -487,4 +581,3 @@ end
 function payoff(option::FloatingPriceArithmeticAsianPut, path)
     return max(0.0, option.strike - mean(path))
 end
-

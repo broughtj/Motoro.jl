@@ -197,6 +197,20 @@ function delta(option::EuropeanCall, model::BlackScholes, data::MarketData)
 end
 
 
+function price(option::CashOrNothingCall, model::BlackScholes, data::MarketData)
+    (; strike, expiry, cash) = option
+    (; spot, rate, vol, div) = data
+    d2 = (log(spot / strike) + (rate - div - 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
+    return AnalyticResult(cash * exp(-rate * expiry) * norm_cdf(d2))
+end
+
+function price(option::CashOrNothingPut, model::BlackScholes, data::MarketData)
+    (; strike, expiry, cash) = option
+    (; spot, rate, vol, div) = data
+    d2 = (log(spot / strike) + (rate - div - 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
+    return AnalyticResult(cash * exp(-rate * expiry) * norm_cdf(-d2))
+end
+
 function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
     (; strike, expiry) = option
     (; spot, rate, vol, div) = data
@@ -522,6 +536,16 @@ price(FloatingPriceArithmeticAsianCall(100.0, 1.0), model, data)
 
 See also: [`ExoticOption`](@ref), [`asset_paths`](@ref), [`SimulationResult`](@ref)
 """
+function price(option::BinaryOption, model::RiskNeutralMonteCarlo, data::MarketData)
+    (; expiry) = option
+    (; spot, rate, vol) = data
+
+    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
+    disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
+
+    return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(model.reps))
+end
+
 function price(option::ExoticOption, model::RiskNeutralMonteCarlo, data::MarketData)
     (; expiry) = option
     (; spot, rate, vol) = data
