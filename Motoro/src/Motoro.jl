@@ -23,6 +23,8 @@ export PricingResult, AnalyticResult, SimulationResult
 export Binomial, BlackScholes, asset_paths, price, delta
 export MonteCarlo, RiskNeutralMonteCarlo, HedgedMonteCarlo
 export HedgeStrategy, StopLoss, DeltaHedge
+export BetaMethod, FixedBeta, OptimalBeta
+export ControlVariate, ControlVariateMonteCarlo
 
 export MarketData
 
