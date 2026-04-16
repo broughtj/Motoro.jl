@@ -224,3 +224,4 @@ payoff(FloatingPriceLookbackPut(100.0, 1.0), path)   # max(0, 100.0 - 95.0) = 5.
 ## Author
 
 Tyler Brough — Utah State University
+Caleb Dissel — Utah State University
