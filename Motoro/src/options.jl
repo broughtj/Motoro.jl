@@ -516,6 +516,8 @@ struct CashOrNothingCall{T<:AbstractFloat} <: BinaryOption
     expiry::T
 end
 
+Base.broadcastable(x::CashOrNothingCall) = Ref(x)
+
 function payoff(option::CashOrNothingCall, spot)
     return spot > option.K ? option.Threshold : 0.0
 end
@@ -524,6 +526,8 @@ struct CashOrNothingPut{T<:AbstractFloat} <: BinaryOption
     strike::T
     expiry::T
 end
+
+Base.broadcastable(x::CashOrNothingPut) = Ref(x)
 
 function payoff(option::CashOrNothingCall, spot)
     return spot > option.K ? option.Threshold : 0.0
