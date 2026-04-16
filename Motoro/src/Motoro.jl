@@ -9,6 +9,7 @@ export EuropeanCall, EuropeanPut, AmericanCall, AmericanPut
 export payoff
 
 export ExoticOption, LookbackOption, ArithmeticAsianOption
+export BinaryOption, CashOrNothingCall, CashOrNothingPut
 export FloatingStrikeLookbackCall, FloatingStrikeLookbackPut
 export FloatingPriceLookbackCall, FloatingPriceLookbackPut
 export FloatingStrikeArithmeticAsianCall, FloatingStrikeArithmeticAsianPut
