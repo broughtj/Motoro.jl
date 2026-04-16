@@ -421,7 +421,7 @@ function generate_draws(::Stratified, n::Int)
     u = rand(n)
     d = Normal()
     draws = [quantile(d, (i - 1 + u[i]) / n) for i in 1:n]
-    # shuffle!(draws)
+    shuffle!(draws)
     return draws
 end
 
