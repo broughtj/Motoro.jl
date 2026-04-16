@@ -488,3 +488,42 @@ function payoff(option::FloatingPriceArithmeticAsianPut, path)
     return max(0.0, option.strike - mean(path))
 end
 
+
+"""
+    CashOrNothingCall(K, Threshold, Expiry) <: ExoticOption
+
+Cash-or-nothing call option. Pays a fixed cash amount (`Threshold`) if the terminal
+stock price exceeds the strike (`K`), and zero otherwise.
+
+# Fields
+- `K::T`: Strike price
+- `Threshold::T`: Fixed cash payout
+- `expiry::T`: Time to expiration in years
+
+# Examples
+```julia
+data  = MarketData(100.0, 0.05, 0.25, 0.0)
+model = RiskNeutralMonteCarlo(252, 1_000_000)
+
+price(CashOrNothingCall(100.0, 1.0, 1.0), model, data)
+```
+
+See also: [`ExoticOption`](@ref), [`price`](@ref), [`SimulationResult`](@ref)
+"""
+struct CashOrNothingCall{T<:AbstractFloat} <: ExoticOption
+    strike::T
+    expiry::T
+end
+
+function payoff(option::CashOrNothingCall, spot)
+    return spot > option.K ? option.Threshold : 0.0
+end
+
+struct CashOrNothingPut{T<:AbstractFloat} <: ExoticOption
+    strike::T
+    expiry::T
+end
+
+function payoff(option::CashOrNothingCall, spot)
+    return spot > option.K ? option.Threshold : 0.0
+end
