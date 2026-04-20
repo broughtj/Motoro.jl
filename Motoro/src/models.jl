@@ -639,4 +639,19 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
 
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
+"""
+Hedge Strategy
+    For each path:
+    Delta = 0
+    at each step j: cash_flow += (Deltaⱼ₋₁ - Deltaⱼ) * Sⱼ
+    at expiry: settle the position
+    replication_cost = -PV(all cash flows)
+    return SimulationResult(mean, std_error)
+"""
 
+struct DeltaHedge <: HedgeStrategy
+    mu::Float64   
+end
+function price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+
+End
