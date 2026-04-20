@@ -639,19 +639,101 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
 
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
+
+
 """
-Hedge Strategy
-    For each path:
-    Delta = 0
-    at each step j: cash_flow += (Deltaⱼ₋₁ - Deltaⱼ) * Sⱼ
-    at expiry: settle the position
-    replication_cost = -PV(all cash flows)
-    return SimulationResult(mean, std_error)
+    DeltaHedge(mu) <: HedgeStrategy
+
+Delta-hedging replication strategy for European options.
+
+mu is the real-world drift used for path simulation in HedgedMonteCarlo.
 """
 
 struct DeltaHedge <: HedgeStrategy
     mu::Float64   
 end
-function price(option::VanillaOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
 
+"""
+    price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+
+Estimate option value by simulating the discounted replication cost of a
+discretely rebalanced Black-Scholes delta hedge.
+"""
+function price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+    (; strike, expiry) = option
+    (; steps, reps, method, strategy) = model
+    (; mu) = strategy
+    (; spot, rate, vol, div) = data
+
+    dt = expiry / steps
+    dfs = exp.(-rate * collect(0:steps) * dt)
+    cost = zeros(reps)
+    paths = asset_paths(method, model, spot, mu, vol, expiry)
+
+    for k in 1:reps
+        cash_flows = zeros(steps + 1)
+        delta_prev = 0.0
+
+        # Rebalance after each move up to (but not including) maturity.
+        for t in 2:steps
+            tau = expiry - (t - 1) * dt
+            opt_t = typeof(option)(strike, tau)
+            data_t = MarketData(paths[k, t], rate, vol, div)
+            delta_now = delta(opt_t, BlackScholes(), data_t)
+
+            cash_flows[t] += (delta_prev - delta_now) * paths[k, t]
+            delta_prev = delta_now
+        end
+
+        st = paths[k, end]
+        cash_flows[end] += delta_prev * st - payoff(option, st)
+
+        cost[k] = -dot(dfs, cash_flows)
+    end
+
+    return SimulationResult(mean(cost), std(cost) / sqrt(reps))
+end
+
+"""
+    compare_estimators_same_paths(option, paths, data)
+
+Compute naive risk-neutral Monte Carlo and delta-hedged replication estimators
+from the exact same simulated paths. Useful for variance comparisons in Q7(e).
+"""
+function compare_estimators_same_paths(option::EuropeanOption, paths::AbstractMatrix, data::MarketData)
+    (; strike, expiry) = option
+    (; rate, vol, div) = data
+
+    reps = size(paths, 1)
+    steps = size(paths, 2) - 1
+    dt = expiry / steps
+    dfs = exp.(-rate * collect(0:steps) * dt)
+
+    # Naive discounted payoff estimator on the same paths.
+    disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
+    naive = SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(reps))
+
+    # Delta-hedged replication-cost estimator on the same paths.
+    cost = zeros(reps)
+    for k in 1:reps
+        cash_flows = zeros(steps + 1)
+        delta_prev = 0.0
+
+        for t in 2:steps
+            tau = expiry - (t - 1) * dt
+            opt_t = typeof(option)(strike, tau)
+            data_t = MarketData(paths[k, t], rate, vol, div)
+            delta_now = delta(opt_t, BlackScholes(), data_t)
+
+            cash_flows[t] += (delta_prev - delta_now) * paths[k, t]
+            delta_prev = delta_now
+        end
+
+        st = paths[k, end]
+        cash_flows[end] += delta_prev * st - payoff(option, st)
+        cost[k] = -dot(dfs, cash_flows)
+    end
+    hedged = SimulationResult(mean(cost), std(cost) / sqrt(reps))
+
+    return (naive=naive, hedged=hedged)
 end
