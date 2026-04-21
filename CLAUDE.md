@@ -9,12 +9,19 @@ The Julia package lives in `Motoro/`. The root directory contains only a minimal
 ```
 Motoro/
   src/
-    data.jl       # MarketData struct
-    options.jl    # All option types and payoff methods
-    models.jl     # All pricing models, result types, and price() methods
-    Motoro.jl     # Module entry point and all exports
+    Motoro.jl          # Module entry point and all exports
+    data.jl            # MarketData struct
+    results.jl         # PricingResult, AnalyticResult, SimulationResult
+    options.jl         # Vanilla option types and payoff methods
+    exotic.jl          # Exotic option types and payoff methods (Binary, Lookback, Asian)
+    analytical.jl      # Binomial, BlackScholes + price/delta methods
+    montecarlo.jl      # VarianceReduction infrastructure, RiskNeutralMonteCarlo, asset_paths
+    hedging.jl         # HedgeStrategy, HedgedMonteCarlo, StopLoss, DeltaHedge
+    control_variate.jl # BetaMethod, ControlVariate, ControlVariateMonteCarlo
   Project.toml
 ```
+
+Include order in `Motoro.jl` is load-order dependent: `results` before pricing methods, `options` and `exotic` before analytical models, `analytical` before `hedging` (DeltaHedge calls `delta()`).
 
 Instructor-only scripts (`hedge_comparison.jl`, `convergence.jl`, `exam_q3.jl`) sit in `Motoro/` but are not part of the package.
 
@@ -41,14 +48,14 @@ There is no test suite. Verification is done by loading the package and checking
 
 ## Branch structure
 
-- `main` — student-facing. Contains vanilla options, exotic options, `RiskNeutralMonteCarlo`, `StopLoss`, and BSM/Binomial pricing.
-- `instructor` — extends `main` with `DeltaHedge`, `ControlVariateMonteCarlo`, and teaching scripts. Not merged to main intentionally.
+- `main` — student-facing. Vanilla options, exotic options, `RiskNeutralMonteCarlo`, `StopLoss`, BSM/Binomial pricing. Still uses the older two-file layout (`options.jl` + `models.jl`).
+- `instructor` — extends `main` with `DeltaHedge`, `ControlVariateMonteCarlo`, and teaching scripts (`hedge_comparison.jl`, `convergence.jl`, `exam_q3.jl`). Uses the refactored split-file layout described above. Not merged to main intentionally.
 
 ## Architecture
 
 ### Type hierarchies
 
-**Options** (`options.jl`):
+**Options** (`options.jl`, `exotic.jl`):
 ```
 VanillaOption
 ├── EuropeanOption → EuropeanCall, EuropeanPut
@@ -60,7 +67,7 @@ ExoticOption
 └── ArithmeticAsianOption → FloatingStrike{Call,Put}, FloatingPrice{Call,Put}
 ```
 
-**Models** (`models.jl`):
+**Models** (`analytical.jl`, `montecarlo.jl`, `hedging.jl`, `control_variate.jl`):
 ```
 MonteCarlo (abstract)
 ├── RiskNeutralMonteCarlo(steps, reps[, method])
@@ -93,11 +100,11 @@ The primary API is `price(option, model, data)`. Julia multiple dispatch routes 
 
 ### Adding new option types
 
-1. Add struct and `payoff` to `options.jl` under the appropriate abstract parent
-2. Add `price` method(s) to `models.jl`
+1. Add struct and `payoff` to `options.jl` (vanilla) or `exotic.jl` (exotic) under the appropriate abstract parent
+2. Add `price` method(s) to the relevant model file (`analytical.jl`, `montecarlo.jl`, etc.)
 3. Export from `Motoro.jl`
 
-If the new option is path-dependent, use the `payoff(option, path::AbstractVector)` signature and make it a subtype of an appropriate `ExoticOption` child. If it is terminal-price-only (like `BinaryOption`), add a `_target_payoffs` dispatch for it alongside the existing `BinaryOption` and `VanillaOption` dispatches in `models.jl`.
+If the new option is path-dependent, use the `payoff(option, path::AbstractVector)` signature and make it a subtype of an appropriate `ExoticOption` child. If it is terminal-price-only (like `BinaryOption`), add a `_target_payoffs` dispatch for it alongside the existing `BinaryOption` and `VanillaOption` dispatches in `control_variate.jl`.
 
 ### Parametric structs and constructors
 
