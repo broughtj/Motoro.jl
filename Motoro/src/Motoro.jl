@@ -1,8 +1,13 @@
 module Motoro
 
 include("data.jl")
+include("results.jl")
 include("options.jl")
-include("models.jl")
+include("exotic.jl")
+include("analytical.jl")
+include("montecarlo.jl")
+include("hedging.jl")
+include("control_variate.jl")
 
 export VanillaOption, EuropeanOption, AmericanOption
 export EuropeanCall, EuropeanPut, AmericanCall, AmericanPut
