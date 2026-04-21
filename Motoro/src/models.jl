@@ -737,3 +737,56 @@ function CESP(option::EuropeanOption, paths::AbstractMatrix, data::MarketData)
 
     return (naive=naive, hedged=hedged)
 end
+
+struct ControlVariateMonteCarlo <: MonteCarlo
+    steps::Int
+    reps::Int
+    method::VarianceReductionMethod
+end
+
+ControlVariateMonteCarlo(steps::Int, reps::Int) = ControlVariateMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()))
+function price(
+    option::EuropeanCall,
+    model::ControlVariateMonteCarlo,
+    data::MarketData
+)
+    (; strike, expiry) = option
+    (; steps, reps) = model
+    (; spot, rate, vol, div) = data
+
+    # Precompute constants
+    dt = expiry / steps
+    nudt = (rate - div - 0.5 * vol^2) * dt
+    sigsdt = vol * sqrt(dt)
+    erddt = exp((rate - div) * dt)
+
+    beta1 = -1.0
+    disc_ct = zeros(reps)
+
+    for j in 1:reps
+        st = spot
+        cv = 0.0
+
+        for i in 1:steps
+            t = (i - 1) * dt
+            tau = expiry - t
+            opt_t = EuropeanCall(strike, tau)
+            data_t = MarketData(st, rate, vol, div)
+
+            delta_t = delta(opt_t, BlackScholes(), data_t)
+            z = randn()
+            stn = st * exp(nudt + sigsdt * z)
+
+            cv += delta_t * (stn - st * erddt)
+            st = stn
+        end
+
+        ct = payoff(option, st) + beta1 * cv
+        disc_ct[j] = exp(-rate * expiry) * ct
+    end
+
+    price = mean(disc_ct)
+    se = std(disc_ct) / sqrt(reps)
+
+    return SimulationResult(price, se)
+end
