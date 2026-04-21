@@ -2,7 +2,8 @@
 
 A Julia package for teaching computational options pricing. Motoro implements classical
 pricing methods — binomial trees, Black-Scholes-Merton, and Monte Carlo simulation —
-alongside exotic options and hedging strategies, with a focus on clarity and pedagogical value.
+alongside exotic options, hedging strategies, and variance reduction techniques, with a
+focus on clarity and pedagogical value.
 
 ## Installation
 
@@ -38,7 +39,7 @@ put  = EuropeanPut(40.0, 1.0)    # ATM put,  1 year to expiry
 
 ### Black-Scholes-Merton (analytical)
 
-Exact closed-form solution for European options under the BSM assumptions.
+Exact closed-form solution for European and binary options under the BSM assumptions.
 
 ```julia
 bsm = BlackScholes()
@@ -65,7 +66,7 @@ Increase `steps` for higher accuracy; the binomial price converges to BSM as `st
 
 ### Monte Carlo
 
-Motoro has two Monte Carlo model types, both subtypes of the abstract `MonteCarlo`:
+Motoro has three Monte Carlo model types, all subtypes of the abstract `MonteCarlo`:
 
 #### `RiskNeutralMonteCarlo` — standard option pricing
 
@@ -78,7 +79,7 @@ price(call, mc, data)
 
 #### Variance Reduction
 
-Both Monte Carlo types accept an optional `VarianceReduction` argument:
+All Monte Carlo types accept an optional `VarianceReduction` argument:
 
 | Draw method  | Pairing method | Effect |
 |---|---|---|
@@ -97,9 +98,44 @@ mc_strat = RiskNeutralMonteCarlo(100, 10_000, VarianceReduction(Stratified(), No
 price(call, mc_strat, data)
 ```
 
+#### `ControlVariateMonteCarlo` — variance reduction via a correlated control
+
+Uses a second option with a known analytical price to reduce estimator variance. The
+adjusted estimator is `V̂_cv = mean(V - β·(C - C_BSM))`.
+
+```julia
+# Optimal β (estimated from the same paths)
+cv = ControlVariateMonteCarlo(1, 10_000, ControlVariate(EuropeanCall(40.0, 1.0)))
+price(target, cv, data)
+
+# Fixed β = 1
+cv1 = ControlVariateMonteCarlo(1, 10_000, ControlVariate(EuropeanCall(40.0, 1.0), 1.0))
+price(target, cv1, data)
+```
+
+Works for vanilla, binary, and path-dependent exotic option targets. The control variate
+option must support `price(option, BlackScholes(), data)`.
+
 ## Exotic Options
 
-Exotic options are path-dependent and priced via `RiskNeutralMonteCarlo`.
+### Binary Options
+
+Pay a fixed cash amount contingent on the terminal asset price.
+
+| Type | Fields | Payoff |
+|---|---|---|
+| `CashOrNothingCall` | `strike, expiry, cash` | `cash` if `S_T > K`, else `0` |
+| `CashOrNothingPut`  | `strike, expiry, cash` | `cash` if `S_T < K`, else `0` |
+
+The `cash` argument defaults to `1.0` when omitted.
+
+```julia
+data = MarketData(100.0, 0.05, 0.25, 0.0)
+con  = CashOrNothingCall(100.0, 1.0)          # pays $1 if S_T > 100
+
+price(con, BlackScholes(), data)              # analytical BSM price
+price(con, RiskNeutralMonteCarlo(1, 50_000), data)   # Monte Carlo
+```
 
 ### Lookback Options
 
@@ -159,7 +195,22 @@ result.price   # mean hedge cost
 result.std     # standard error
 ```
 
-Variance reduction works here too — pass the `VarianceReduction` before the strategy:
+### Delta Hedge
+
+Continuously rebalances a BSM delta hedge under the real-world (P) measure. At each
+time step the BSM delta is recomputed and the portfolio is rebalanced; cash flows are
+discounted and averaged. As `steps → ∞` the mean cost converges to the BSM price with
+variance that shrinks as `O(1/steps)`.
+
+```julia
+model = HedgedMonteCarlo(100, 50_000, DeltaHedge(0.10))   # mu = 10%
+result = price(call, model, data)
+result.price   # mean hedge cost (→ BSM as steps → ∞)
+result.std     # standard error
+```
+
+Variance reduction works with both hedge strategies — pass the `VarianceReduction`
+before the strategy:
 
 ```julia
 model = HedgedMonteCarlo(100, 50_000, VarianceReduction(PseudoRandom(), Antithetic()), StopLoss(0.10))
@@ -178,6 +229,9 @@ VanillaOption
     └── AmericanPut(strike, expiry)
 
 ExoticOption
+├── BinaryOption
+│   ├── CashOrNothingCall(strike, expiry[, cash])
+│   └── CashOrNothingPut(strike, expiry[, cash])
 ├── LookbackOption
 │   ├── FloatingStrikeLookbackCall(expiry)
 │   ├── FloatingStrikeLookbackPut(expiry)
@@ -191,27 +245,36 @@ ExoticOption
 
 MonteCarlo (abstract)
 ├── RiskNeutralMonteCarlo(steps, reps[, method])
-└── HedgedMonteCarlo(steps, reps, strategy[, method])
+├── HedgedMonteCarlo(steps, reps, strategy[, method])
+└── ControlVariateMonteCarlo(steps, reps, control[, method])
 
 HedgeStrategy (abstract)
-└── StopLoss(mu)
+├── StopLoss(mu)
+└── DeltaHedge(mu)
+
+BetaMethod (abstract)
+├── FixedBeta(β)
+└── OptimalBeta
 ```
 
 ## Payoff Function
 
-`payoff(option, spot)` computes the intrinsic value of a vanilla option at any spot price:
+`payoff(option, spot)` computes the intrinsic value of a vanilla or binary option at a
+given terminal spot price:
 
 ```julia
-payoff(EuropeanCall(100.0, 1.0), 110.0)   # 10.0
-payoff(EuropeanPut(100.0, 1.0),   90.0)   # 10.0
-payoff(EuropeanPut(100.0, 1.0),  110.0)   #  0.0
+payoff(EuropeanCall(100.0, 1.0), 110.0)       # 10.0
+payoff(EuropeanPut(100.0, 1.0),   90.0)       # 10.0
+payoff(CashOrNothingCall(100.0, 1.0), 110.0)  #  1.0
+payoff(CashOrNothingCall(100.0, 1.0),  90.0)  #  0.0
 ```
 
-`payoff(option, path)` computes the payoff of an exotic option from a full price path:
+`payoff(option, path)` computes the payoff of a path-dependent exotic option from a
+full simulated price path:
 
 ```julia
 path = [100.0, 95.0, 102.0, 98.0, 105.0]
-payoff(FloatingStrikeLookbackCall(1.0), path)   # 105.0 - 95.0 = 10.0
+payoff(FloatingStrikeLookbackCall(1.0), path)        # 105.0 - 95.0 = 10.0
 payoff(FloatingPriceLookbackPut(100.0, 1.0), path)   # max(0, 100.0 - 95.0) = 5.0
 ```
 
