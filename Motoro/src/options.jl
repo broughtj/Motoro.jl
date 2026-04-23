@@ -196,7 +196,6 @@ function payoff(option::AmericanPut, spot)
 end
 
 
-
 """
     ExoticOption
 
@@ -227,6 +226,14 @@ See also: [`FloatingStrikeArithmeticAsianCall`](@ref), [`FloatingStrikeArithmeti
 [`FloatingPriceArithmeticAsianCall`](@ref), [`FloatingPriceArithmeticAsianPut`](@ref)
 """
 abstract type ArithmeticAsianOption <: ExoticOption end
+
+"""
+    GeometricAsianOption <: ExoticOption
+
+Abstract type for geometric Asian options, whose payoff depends on the geometric
+mean of the asset price over the life of the contract.
+"""
+abstract type GeometricAsianOption <: ExoticOption end
 
 
 ## Lookback Options
@@ -458,6 +465,50 @@ struct FloatingPriceArithmeticAsianPut{T<:AbstractFloat} <: ArithmeticAsianOptio
 end
 
 """
+    FixedStrikeGeometricAsianCall(strike, expiry)
+
+Geometric Asian call with fixed strike `K` and floating price equal to
+the path geometric mean `G`.
+"""
+struct FixedStrikeGeometricAsianCall{T<:AbstractFloat} <: GeometricAsianOption
+    strike::T
+    expiry::T
+end
+
+"""
+    FixedStrikeGeometricAsianPut(strike, expiry)
+
+Geometric Asian put with fixed strike `K` and floating price equal to
+the path geometric mean `G`.
+"""
+struct FixedStrikeGeometricAsianPut{T<:AbstractFloat} <: GeometricAsianOption
+    strike::T
+    expiry::T
+end
+
+"""
+    FloatingStrikeGeometricAsianCall(expiry)
+
+Geometric Asian call with floating strike equal to path geometric mean `G`.
+"""
+struct FloatingStrikeGeometricAsianCall{T<:AbstractFloat} <: GeometricAsianOption
+    expiry::T
+end
+
+"""
+    FloatingStrikeGeometricAsianPut(expiry)
+
+Geometric Asian put with floating strike equal to path geometric mean `G`.
+"""
+struct FloatingStrikeGeometricAsianPut{T<:AbstractFloat} <: GeometricAsianOption
+    expiry::T
+end
+
+function geom_mean(path)
+    return exp(mean(log.(path)))
+end
+
+"""
     payoff(option::ArithmeticAsianOption, path)
 
 Compute the payoff of an arithmetic Asian option from a simulated asset price path.
@@ -488,6 +539,26 @@ function payoff(option::FloatingPriceArithmeticAsianPut, path)
     return max(0.0, option.strike - mean(path))
 end
 
+"""
+    payoff(option::GeometricAsianOption, path)
+
+Compute geometric-Asian payoff from a full simulated path.
+"""
+function payoff(option::FixedStrikeGeometricAsianCall, path)
+    return max(0.0, geom_mean(path) - option.strike)
+end
+
+function payoff(option::FixedStrikeGeometricAsianPut, path)
+    return max(0.0, option.strike - geom_mean(path))
+end
+
+function payoff(option::FloatingStrikeGeometricAsianCall, path)
+    return max(0.0, path[end] - geom_mean(path))
+end
+
+function payoff(option::FloatingStrikeGeometricAsianPut, path)
+    return max(0.0, geom_mean(path) - path[end])
+end
 
 """
     CashOrNothingCall(K, Threshold, Expiry) <: ExoticOption
@@ -505,7 +576,7 @@ stock price exceeds the strike (`K`), and zero otherwise.
 data  = MarketData(100.0, 0.05, 0.25, 0.0)
 model = RiskNeutralMonteCarlo(252, 1_000_000)
 
-price(CashOrNothingCall(100.0, 1.0, 1.0), model, data)
+price(CashOrNothingCall(100.0, 1.0), model, data)
 ```
 
 See also: [`ExoticOption`](@ref), [`price`](@ref), [`SimulationResult`](@ref)
@@ -532,3 +603,4 @@ Base.broadcastable(x::CashOrNothingPut) = Ref(x)
 function payoff(option::CashOrNothingPut, spot)
     return spot < option.strike ? 1.0 : 0.0
 end
+

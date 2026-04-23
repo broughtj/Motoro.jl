@@ -209,6 +209,86 @@ function price(option::EuropeanPut, model::BlackScholes, data::MarketData)
     return AnalyticResult(p)
 end
 
+"""
+    geom_asian_price(option, spot, rate, vol, div, steps; fixings_observed=0, running_geom_mean=spot, next_fixing_time=option.expiry/steps)
+
+Closed-form Kemna-Vorst price for fixed-strike geometric Asian options.
+"""
+function geom_asian_price(
+    option::Union{FixedStrikeGeometricAsianCall{T}, FixedStrikeGeometricAsianPut{T}},
+    spot::Real, rate::Real, vol::Real, div::Real, steps::Integer;
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = spot,
+    next_fixing_time::Real = option.expiry / steps,
+) where {T<:AbstractFloat}
+    if fixings_observed != 0
+        throw(ArgumentError("`geom_asian_price` currently supports fresh options only (`fixings_observed == 0`)."))
+    end
+
+    (; strike, expiry) = option
+    σg = vol * sqrt(((steps + 1) * (2 * steps + 1)) / (6 * steps^2))
+    μg = (rate - div - 0.5 * vol^2) * ((steps + 1) / (2 * steps)) + 0.5 * σg^2
+
+    sqrtT = sqrt(expiry)
+    d1 = (log(spot / strike) + (μg + 0.5 * σg^2) * expiry) / (σg * sqrtT)
+    d2 = d1 - σg * sqrtT
+    normal = Normal()
+
+    if option isa FixedStrikeGeometricAsianCall
+        p = exp(-rate * expiry) * (spot * exp(μg * expiry) * cdf(normal, d1) - strike * cdf(normal, d2))
+    else
+        p = exp(-rate * expiry) * (strike * cdf(normal, -d2) - spot * exp(μg * expiry) * cdf(normal, -d1))
+    end
+
+    return max(zero(T), p)
+end
+
+"""
+    geom_asian_price(option, data, steps; kwargs...)
+
+Convenience overload that accepts [`MarketData`](@ref), mirroring package pricing APIs.
+"""
+function geom_asian_price(
+    option::Union{FixedStrikeGeometricAsianCall{T}, FixedStrikeGeometricAsianPut{T}},
+    data::MarketData,
+    steps::Integer;
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = data.spot,
+    next_fixing_time::Real = option.expiry / steps,
+) where {T<:AbstractFloat}
+    (; spot, rate, vol, div) = data
+    return geom_asian_price(
+        option, spot, rate, vol, div, steps;
+        fixings_observed=fixings_observed,
+        running_geom_mean=running_geom_mean,
+        next_fixing_time=next_fixing_time,
+    )
+end
+
+"""
+    price(option, model::BlackScholes, data::MarketData; steps=252)
+
+Black-Scholes-style API wrapper for fixed-strike geometric Asian options.
+The number of monitoring dates is provided via `steps`.
+"""
+function price(
+    option::Union{FixedStrikeGeometricAsianCall{T}, FixedStrikeGeometricAsianPut{T}},
+    model::BlackScholes,
+    data::MarketData;
+    steps::Integer = 252,
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = data.spot,
+    next_fixing_time::Real = option.expiry / steps,
+) where {T<:AbstractFloat}
+    p = geom_asian_price(
+        option, data, steps;
+        fixings_observed=fixings_observed,
+        running_geom_mean=running_geom_mean,
+        next_fixing_time=next_fixing_time,
+    )
+    return AnalyticResult(p)
+end
+
 
 """
     delta(option::EuropeanPut, model::BlackScholes, data::MarketData) -> Float64
@@ -337,6 +417,8 @@ See also: [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref)
 """
 abstract type MonteCarlo end
 
+abstract type AssetPaths end
+
 """
     RiskNeutralMonteCarlo(steps, reps[, method])
 
@@ -433,62 +515,145 @@ function apply_pairing(::Antithetic, draws)
     [draws; -draws]
 end
 
-"""
-    asset_paths(method::VarianceReduction, model::MonteCarlo, spot, rate, vol, expiry)
+# """
+#     asset_paths(method::VarianceReduction, model::MonteCarlo, spot, rate, vol, expiry)
 
-Generate simulated asset price paths using geometric Brownian motion.
+# Generate simulated asset price paths using geometric Brownian motion.
 
-Works with any [`MonteCarlo`](@ref) subtype (`RiskNeutralMonteCarlo` or `HedgedMonteCarlo`).
+# Works with any [`MonteCarlo`](@ref) subtype (`RiskNeutralMonteCarlo` or `HedgedMonteCarlo`).
 
-# Arguments
-- `method::VarianceReduction`: Variance reduction strategy controlling draw generation and pairing
-- `model::MonteCarlo`: Any Monte Carlo model (provides `steps` and `reps`)
-- `spot`: Initial asset price
-- `rate`: Drift rate (risk-free rate for risk-neutral pricing; real-world drift for hedging)
-- `vol`: Volatility (annualized)
-- `expiry`: Time to expiration in years
+# # Arguments
+# - `method::VarianceReduction`: Variance reduction strategy controlling draw generation and pairing
+# - `model::MonteCarlo`: Any Monte Carlo model (provides `steps` and `reps`)
+# - `spot`: Initial asset price
+# - `rate`: Drift rate (risk-free rate for risk-neutral pricing; real-world drift for hedging)
+# - `vol`: Volatility (annualized)
+# - `expiry`: Time to expiration in years
 
-# Returns
-Matrix of size `(reps, steps+1)`. Each row is one simulated price path;
-column 1 is the initial spot price and column `steps+1` is the terminal price.
+# # Returns
+# Matrix of size `(reps, steps+1)`. Each row is one simulated price path;
+# column 1 is the initial spot price and column `steps+1` is the terminal price.
 
-# Examples
-```julia
-data  = MarketData(41.0, 0.08, 0.30, 0.0)
-model = RiskNeutralMonteCarlo(100, 1_000)
-paths = asset_paths(model.method, model, data.spot, data.rate, data.vol, 1.0)
-size(paths)  # (1000, 101)
-```
+# # Examples
+# ```julia
+# data  = MarketData(41.0, 0.08, 0.30, 0.0)
+# model = RiskNeutralMonteCarlo(100, 1_000)
+# paths = asset_paths(model.method, model, data.spot, data.rate, data.vol, 1.0)
+# size(paths)  # (1000, 101)
+# ```
 
-See also: [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref), [`price`](@ref)
-"""
-function asset_paths(method::VarianceReduction, model::MonteCarlo, spot, rate, vol, expiry)
-    (; steps, reps) = model
+# See also: [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref), [`price`](@ref)
+# """
+# function asset_paths(method::VarianceReduction, model::MonteCarlo, spot, rate, vol, expiry)
+#     (; steps, reps) = model
 
-    dt = expiry / steps
-    nudt = (rate - 0.5 * vol^2) * dt
-    sidt = vol * sqrt(dt)
-    n = reps ÷ (method.pairing isa Antithetic ? 2 : 1)
+#     dt = expiry / steps
+#     nudt = (rate - 0.5 * vol^2) * dt
+#     sidt = vol * sqrt(dt)
+#     n = reps ÷ (method.pairing isa Antithetic ? 2 : 1)
 
-    paths = zeros(reps, steps + 1)
-    paths[:, 1] .= spot
+#     paths = zeros(reps, steps + 1)
+#     paths[:, 1] .= spot
 
-    @inbounds for j in 2:steps+1
-        z = generate_draws(method.draw, n)
-        z = apply_pairing(method.pairing, z)
-        paths[:, j] = paths[:, j-1] .* exp.(nudt .+ sidt .* z)
-    end
+#     @inbounds for j in 2:steps+1
+#         z = generate_draws(method.draw, n)
+#         z = apply_pairing(method.pairing, z)
+#         paths[:, j] = paths[:, j-1] .* exp.(nudt .+ sidt .* z)
+#     end
 
-    return paths
-end
+#     return paths
+# end
 
 
 function price(option::EuropeanOption, model::RiskNeutralMonteCarlo, data::MarketData)
-    (; strike, expiry) = option
     (; spot, rate, vol) = data
+    process = GeometricBrownianMotion(model.method, model, spot, rate, vol, option.expiry)
+    return price(option, model, data, process)
+end
 
-    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
+function price(option::EuropeanOption, model::RiskNeutralMonteCarlo, data::MarketData, process::AssetPaths)
+    (; strike, expiry) = option
+    (; rate) = data
+
+    paths = asset_paths(process)
     disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
+
+    return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(model.reps))
+end
+
+function price(
+    option::GeometricAsianOption,
+    model::RiskNeutralMonteCarlo,
+    data::MarketData;
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = data.spot,
+)
+    (; spot, rate, vol) = data
+    process = GeometricBrownianMotion(model.method, model, spot, rate, vol, option.expiry)
+    return price(
+        option, model, data, process;
+        fixings_observed=fixings_observed,
+        running_geom_mean=running_geom_mean,
+    )
+end
+
+function price(
+    option::GeometricAsianOption,
+    model::RiskNeutralMonteCarlo,
+    data::MarketData,
+    steps::Integer;
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = data.spot,
+)
+    if steps <= 0
+        throw(ArgumentError("`steps` must be positive."))
+    end
+
+    model_with_steps = RiskNeutralMonteCarlo(steps, model.reps, model.method)
+    return price(
+        option, model_with_steps, data;
+        fixings_observed=fixings_observed,
+        running_geom_mean=running_geom_mean,
+    )
+end
+
+function price(
+    option::GeometricAsianOption,
+    model::RiskNeutralMonteCarlo,
+    data::MarketData,
+    process::AssetPaths;
+    fixings_observed::Integer = 0,
+    running_geom_mean::Real = data.spot,
+)
+    if fixings_observed < 0
+        throw(ArgumentError("`fixings_observed` must be non-negative."))
+    end
+    if running_geom_mean <= 0
+        throw(ArgumentError("`running_geom_mean` must be positive."))
+    end
+
+    (; expiry) = option
+    (; rate) = data
+    paths = asset_paths(process)
+    future_fixings = size(paths, 2)
+    total_fixings = fixings_observed + future_fixings
+    obs_weight = fixings_observed / total_fixings
+    fut_weight = future_fixings / total_fixings
+
+    disc_payoffs = exp(-rate * expiry) .* map(eachrow(paths)) do row
+        future_geom_mean = geom_mean(row)
+        combined_geom_mean = (running_geom_mean^obs_weight) * (future_geom_mean^fut_weight)
+
+        if option isa FixedStrikeGeometricAsianCall
+            max(0.0, combined_geom_mean - option.strike)
+        elseif option isa FixedStrikeGeometricAsianPut
+            max(0.0, option.strike - combined_geom_mean)
+        elseif option isa FloatingStrikeGeometricAsianCall
+            max(0.0, row[end] - combined_geom_mean)
+        else
+            max(0.0, combined_geom_mean - row[end])
+        end
+    end
 
     return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(model.reps))
 end
@@ -523,25 +688,39 @@ price(FloatingPriceArithmeticAsianCall(100.0, 1.0), model, data)
 See also: [`ExoticOption`](@ref), [`asset_paths`](@ref), [`SimulationResult`](@ref)
 """
 function price(option::ExoticOption, model::RiskNeutralMonteCarlo, data::MarketData)
-    (; expiry) = option
     (; spot, rate, vol) = data
+    process = GeometricBrownianMotion(model.method, model, spot, rate, vol, option.expiry)
+    return price(option, model, data, process)
+end
 
-    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
+function price(option::ExoticOption, model::RiskNeutralMonteCarlo, data::MarketData, process::AssetPaths)
+    (; expiry) = option
+    (; rate) = data
+
+    paths = asset_paths(process)
     disc_payoffs = exp(-rate * expiry) .* [payoff(option, row) for row in eachrow(paths)]
 
     return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(model.reps))
 end
 
-
 function price(option::BinaryOption, model::RiskNeutralMonteCarlo, data::MarketData)
-    (; expiry) = option
     (; spot, rate, vol) = data
+    process = GeometricBrownianMotion(model.method, model, spot, rate, vol, option.expiry)
+    return price(option, model, data, process)
+end
 
-    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
+function price(option::BinaryOption, model::RiskNeutralMonteCarlo, data::MarketData, process::AssetPaths)
+    (; expiry) = option
+    (; rate) = data
+
+    paths = asset_paths(process)
     disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
 
     return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(model.reps))
 end
+
+
+
 
 
 """
@@ -605,10 +784,20 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
     (; mu) = strategy
     (; spot, rate, vol, div) = data
 
+    process = GeometricBrownianMotion(method, model, spot, mu, vol, expiry)
+    return price(option, model, data, process)
+end
+
+function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::MarketData, process::AssetPaths)
+    (; strike, expiry) = option
+    (; steps, reps, strategy) = model
+    (; mu) = strategy
+    (; rate, vol, div) = data
+
     dt = expiry / steps
     dfs = exp.(-rate * collect(0:1:steps) * dt)
     cost = zeros(reps)
-    paths = asset_paths(method, model, spot, mu, vol, expiry)
+    paths = asset_paths(process)
 
     for k in 1:reps
         cash_flows = zeros(steps + 1)
@@ -640,13 +829,12 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
 
-
 """
     DeltaHedge(mu) <: HedgeStrategy
 
 Delta-hedging replication strategy for European options.
 
-mu is the real-world drift used for path simulation in HedgedMonteCarlo.
+`mu` is the real-world drift used for path simulation in `HedgedMonteCarlo`.
 """
 
 struct DeltaHedge <: HedgeStrategy
@@ -665,10 +853,19 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data
     (; mu) = strategy
     (; spot, rate, vol, div) = data
 
+    process = GeometricBrownianMotion(method, model, spot, mu, vol, expiry)
+    return price(option, model, data, process)
+end
+
+function price(option::EuropeanOption, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData, process::AssetPaths)
+    (; strike, expiry) = option
+    (; steps, reps) = model
+    (; rate, vol, div) = data
+
     dt = expiry / steps
     dfs = exp.(-rate * collect(0:steps) * dt)
     cost = zeros(reps)
-    paths = asset_paths(method, model, spot, mu, vol, expiry)
+    paths = asset_paths(process)
 
     for k in 1:reps
         cash_flows = zeros(steps + 1)
@@ -700,43 +897,43 @@ end
 Compute naive risk-neutral Monte Carlo and delta-hedged replication estimators
 from the exact same simulated paths. Useful for variance comparisons in Q7(e).
 """
-function CESP(option::EuropeanOption, paths::AbstractMatrix, data::MarketData)
-    (; strike, expiry) = option
-    (; rate, vol, div) = data
+# function compare_estimators_same_paths(option::EuropeanOption, paths::AbstractMatrix, data::MarketData)
+#     (; strike, expiry) = option
+#     (; rate, vol, div) = data
 
-    reps = size(paths, 1)
-    steps = size(paths, 2) - 1
-    dt = expiry / steps
-    dfs = exp.(-rate * collect(0:steps) * dt)
+#     reps = size(paths, 1)
+#     steps = size(paths, 2) - 1
+#     dt = expiry / steps
+#     dfs = exp.(-rate * collect(0:steps) * dt)
 
-    # Naive discounted payoff estimator on the same paths.
-    disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
-    naive = SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(reps))
+#     # Naive discounted payoff estimator on the same paths.
+#     disc_payoffs = exp(-rate * expiry) .* payoff.(option, paths[:, end])
+#     naive = SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(reps))
 
-    # Delta-hedged replication-cost estimator on the same paths.
-    cost = zeros(reps)
-    for k in 1:reps
-        cash_flows = zeros(steps + 1)
-        delta_prev = 0.0
+#     # Delta-hedged replication-cost estimator on the same paths.
+#     cost = zeros(reps)
+#     for k in 1:reps
+#         cash_flows = zeros(steps + 1)
+#         delta_prev = 0.0
 
-        for t in 2:steps
-            tau = expiry - (t - 1) * dt
-            opt_t = typeof(option)(strike, tau)
-            data_t = MarketData(paths[k, t], rate, vol, div)
-            delta_now = delta(opt_t, BlackScholes(), data_t)
+#         for t in 2:steps
+#             tau = expiry - (t - 1) * dt
+#             opt_t = typeof(option)(strike, tau)
+#             data_t = MarketData(paths[k, t], rate, vol, div)
+#             delta_now = delta(opt_t, BlackScholes(), data_t)
 
-            cash_flows[t] += (delta_prev - delta_now) * paths[k, t]
-            delta_prev = delta_now
-        end
+#             cash_flows[t] += (delta_prev - delta_now) * paths[k, t]
+#             delta_prev = delta_now
+#         end
 
-        st = paths[k, end]
-        cash_flows[end] += delta_prev * st - payoff(option, st)
-        cost[k] = -dot(dfs, cash_flows)
-    end
-    hedged = SimulationResult(mean(cost), std(cost) / sqrt(reps))
+#         st = paths[k, end]
+#         cash_flows[end] += delta_prev * st - payoff(option, st)
+#         cost[k] = -dot(dfs, cash_flows)
+#     end
+#     hedged = SimulationResult(mean(cost), std(cost) / sqrt(reps))
 
-    return (naive=naive, hedged=hedged)
-end
+#     return (naive=naive, hedged=hedged)
+# end
 
 struct ControlVariateMonteCarlo <: MonteCarlo
     steps::Int
