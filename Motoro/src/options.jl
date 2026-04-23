@@ -60,9 +60,34 @@ end
 
 Base.broadcastable(x::EuropeanCall) = Ref(x)
 
-function payoff(option::EuropeanCall, spot)
-    return max(0.0, spot - option.strike)
-end
+"""
+    payoff(option::VanillaOption, spot)
+
+Compute the intrinsic payoff of a vanilla option at a given terminal spot price.
+
+# Arguments
+- `option::VanillaOption`: The option contract
+- `spot`: Terminal spot price of the underlying asset (scalar)
+
+# Returns
+The non-negative payoff: `max(0, S - K)` for calls, `max(0, K - S)` for puts.
+
+# Examples
+```julia
+call = EuropeanCall(100.0, 1.0)
+payoff(call, 110.0)  # 10.0
+payoff(call, 90.0)   # 0.0
+
+put = EuropeanPut(100.0, 1.0)
+payoff(put, 90.0)    # 10.0
+
+# Broadcast over a vector of spot prices:
+payoff.(put, [85.0, 90.0, 95.0, 100.0, 105.0])
+```
+
+See also: [`price`](@ref)
+"""
+payoff(option::EuropeanCall, spot) = max(0.0, spot - option.strike)
 
 
 """
@@ -97,34 +122,7 @@ end
 
 Base.broadcastable(x::EuropeanPut) = Ref(x)
 
-"""
-    payoff(option::VanillaOption, spot)
-
-Calculate the intrinsic value (payoff) of an option at a given spot price.
-
-# Arguments
-- `option::VanillaOption`: The option contract
-- `spot`: Spot price of the underlying asset (scalar)
-
-# Returns
-The intrinsic value of the option. For calls: `max(0, S - K)`, for puts: `max(0, K - S)`.
-
-# Examples
-```julia
-call = EuropeanCall(100.0, 1.0)
-payoff(call, 110.0)  # Returns 10.0
-
-put = EuropeanPut(100.0, 1.0)
-payoff(put, 90.0)    # Returns 10.0
-payoff(put, 110.0)   # Returns 0.0
-
-# For a vector of spot prices, use broadcast syntax:
-payoff.(put, [85.0, 90.0, 95.0, 100.0, 105.0])
-```
-"""
-function payoff(option::EuropeanPut, spot)
-    return max(0.0, option.strike - spot)
-end
+payoff(option::EuropeanPut, spot) = max(0.0, option.strike - spot)
 
 
 ## American Options
@@ -137,6 +135,9 @@ An American call option that can be exercised at any time up to and including ex
 # Fields
 - `strike::AbstractFloat`: Strike price (exercise price)
 - `expiry::AbstractFloat`: Time to expiration in years
+
+# Payoff
+The payoff at exercise is `max(0, S - K)` where `S` is the spot price and `K` is the strike.
 
 # Notes
 For non-dividend paying stocks, American calls have the same value as European calls
@@ -156,9 +157,7 @@ end
 
 Base.broadcastable(x::AmericanCall) = Ref(x)
 
-function payoff(option::AmericanCall, spot)
-    return max(0.0, spot - option.strike)
-end
+payoff(option::AmericanCall, spot) = max(0.0, spot - option.strike)
 
 
 """
@@ -169,6 +168,9 @@ An American put option that can be exercised at any time up to and including exp
 # Fields
 - `strike::AbstractFloat`: Strike price (exercise price)
 - `expiry::AbstractFloat`: Time to expiration in years
+
+# Payoff
+The payoff at exercise is `max(0, K - S)` where `S` is the spot price and `K` is the strike.
 
 # Notes
 American puts always trade at a premium to European puts due to the early exercise feature.
@@ -189,6 +191,4 @@ end
 
 Base.broadcastable(x::AmericanPut) = Ref(x)
 
-function payoff(option::AmericanPut, spot)
-    return max(0.0, option.strike - spot)
-end
+payoff(option::AmericanPut, spot) = max(0.0, option.strike - spot)

@@ -9,10 +9,16 @@ include("montecarlo.jl")
 include("hedging.jl")
 include("control_variate.jl")
 
+# Market data and pricing results
+export MarketData
+export PricingResult, AnalyticResult, SimulationResult
+
+# Vanilla options
 export VanillaOption, EuropeanOption, AmericanOption
 export EuropeanCall, EuropeanPut, AmericanCall, AmericanPut
 export payoff
 
+# Exotic options
 export ExoticOption, BinaryOption, LookbackOption, ArithmeticAsianOption
 export CashOrNothingCall, CashOrNothingPut
 export FloatingStrikeLookbackCall, FloatingStrikeLookbackPut
@@ -20,17 +26,21 @@ export FloatingPriceLookbackCall, FloatingPriceLookbackPut
 export FloatingStrikeArithmeticAsianCall, FloatingStrikeArithmeticAsianPut
 export FloatingPriceArithmeticAsianCall, FloatingPriceArithmeticAsianPut
 
+# Pricing models and primary API
+export price, delta
+export Binomial, BlackScholes
+export MonteCarlo, RiskNeutralMonteCarlo
 export VarianceReductionMethod, VarianceReduction
 export DrawMethod, PseudoRandom, Stratified
 export PairingMethod, NoPairing, Antithetic
-export generate_draws, apply_pairing
-export PricingResult, AnalyticResult, SimulationResult
-export Binomial, BlackScholes, asset_paths, price, delta
-export MonteCarlo, RiskNeutralMonteCarlo, HedgedMonteCarlo
+export asset_paths
+
+# Hedging
 export HedgeStrategy, StopLoss, DeltaHedge
+export HedgedMonteCarlo
+
+# Control variate
 export BetaMethod, FixedBeta, OptimalBeta
 export ControlVariate, ControlVariateMonteCarlo
-
-export MarketData
 
 end # module Motoro

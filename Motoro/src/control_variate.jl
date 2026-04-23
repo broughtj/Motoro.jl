@@ -10,17 +10,17 @@ Concrete subtypes: [`FixedBeta`](@ref), [`OptimalBeta`](@ref)
 abstract type BetaMethod end
 
 """
-    FixedBeta(β) <: BetaMethod
+    FixedBeta(beta) <: BetaMethod
 
 Use a fixed, user-supplied control variate coefficient.
 
 # Fields
-- `β::Float64`: The control variate coefficient
+- `beta::Float64`: The control variate coefficient
 
 See also: [`OptimalBeta`](@ref), [`ControlVariate`](@ref)
 """
 struct FixedBeta <: BetaMethod
-    β::Float64
+    beta::Float64
 end
 
 """
@@ -36,12 +36,12 @@ See also: [`FixedBeta`](@ref), [`ControlVariate`](@ref)
 """
 struct OptimalBeta <: BetaMethod end
 
-compute_beta(b::FixedBeta,  V, C) = b.β
+compute_beta(b::FixedBeta, V, C) = b.beta
 compute_beta(::OptimalBeta, V, C) = cov(V, C) / var(C)
 
 
 """
-    ControlVariate(option[, β])
+    ControlVariate(option[, beta])
 
 Pairs a control variate option with a coefficient strategy.
 
@@ -52,7 +52,7 @@ centre the correction.
 
 # Arguments
 - `option`: The control variate option (e.g. [`EuropeanCall`](@ref))
-- `β`: Either a `Float64` (→ [`FixedBeta`](@ref)) or a [`BetaMethod`](@ref).
+- `beta`: Either a `Float64` (→ [`FixedBeta`](@ref)) or a [`BetaMethod`](@ref).
   Defaults to [`OptimalBeta`](@ref).
 
 # Examples
@@ -67,11 +67,11 @@ See also: [`ControlVariateMonteCarlo`](@ref), [`BetaMethod`](@ref)
 """
 struct ControlVariate{O, B<:BetaMethod}
     option::O
-    β::B
+    beta::B
 end
 
-ControlVariate(option)          = ControlVariate(option, OptimalBeta())
-ControlVariate(option, β::Real) = ControlVariate(option, FixedBeta(Float64(β)))
+ControlVariate(option) = ControlVariate(option, OptimalBeta())
+ControlVariate(option, beta::Real) = ControlVariate(option, FixedBeta(Float64(beta)))
 
 
 """
@@ -91,15 +91,18 @@ of reduction depends on the correlation between the two payoffs and the choice o
 - `steps::Int`: Number of time steps per path
 - `reps::Int`: Number of simulation paths
 - `method::VarianceReductionMethod`: Draw and pairing strategy
-- `control::ControlVariate`: The control variate option and β method
+- `control::ControlVariate`: The control variate option and beta coefficient strategy
 
 # Examples
 ```julia
-data   = MarketData(100.0, 0.05, 0.25, 0.0)
+data = MarketData(100.0, 0.05, 0.25, 0.0)
 target = CashOrNothingCall(100.0, 1.0, 1.0)
 
-price(target, ControlVariateMonteCarlo(1, 10_000, ControlVariate(EuropeanCall(100.0, 1.0))),      data)
-price(target, ControlVariateMonteCarlo(1, 10_000, ControlVariate(EuropeanCall(100.0, 1.0), 1.0)), data)
+cv = ControlVariate(EuropeanCall(100.0, 1.0))
+price(target, ControlVariateMonteCarlo(1, 10_000, cv), data)
+
+cv = ControlVariate(EuropeanCall(100.0, 1.0), 1.0)
+price(target, ControlVariateMonteCarlo(1, 10_000, cv), data)
 ```
 
 See also: [`ControlVariate`](@ref), [`RiskNeutralMonteCarlo`](@ref)
@@ -112,18 +115,21 @@ struct ControlVariateMonteCarlo{CV<:ControlVariate} <: MonteCarlo
 end
 
 ControlVariateMonteCarlo(steps::Int, reps::Int, control::ControlVariate) =
-    ControlVariateMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), control)
+    ControlVariateMonteCarlo(steps, reps,
+        VarianceReduction(PseudoRandom(), NoPairing()), control)
+
+ControlVariateMonteCarlo(steps::Int, reps::Int, control::ControlVariate,
+        method::VarianceReductionMethod) =
+    ControlVariateMonteCarlo(steps, reps, method, control)
 
 
-# Internal: collect discounted payoffs for a target option from simulated paths.
+# Internal: collect undiscounted payoffs for a target option from simulated paths.
 # Terminal-price options (vanilla, binary) use only paths[:, end].
 # Path-dependent options (lookback, Asian) use the full row.
-_target_payoffs(option::VanillaOption, paths, disc) =
-    disc .* payoff.(option, paths[:, end])
-_target_payoffs(option::BinaryOption,  paths, disc) =
-    disc .* payoff.(option, paths[:, end])
-_target_payoffs(option::ExoticOption,  paths, disc) =
-    disc .* [payoff(option, row) for row in eachrow(paths)]
+_collect_payoffs(option::Union{VanillaOption, BinaryOption}, paths) =
+    payoff.(option, paths[:, end])
+_collect_payoffs(option::ExoticOption, paths) =
+    [payoff(option, row) for row in eachrow(paths)]
 
 
 """
@@ -133,6 +139,11 @@ Price an option via Monte Carlo with a control variate.
 
 Works for vanilla, binary, and path-dependent exotic options as targets.
 The control variate option must support `price(cv, BlackScholes(), data)`.
+
+# Arguments
+- `option`: The target option (any vanilla, binary, or path-dependent exotic option)
+- `model::ControlVariateMonteCarlo`: Simulation parameters including the control variate
+- `data::MarketData`: Market parameters (spot, rate, vol, div)
 
 # Returns
 A [`SimulationResult`](@ref) with the CV-adjusted mean price and its standard error.
@@ -147,12 +158,12 @@ function price(option, model::ControlVariateMonteCarlo, data::MarketData)
     c_bsm = price(control.option, BlackScholes(), data).price
 
     paths = asset_paths(model.method, model, spot, rate, vol, expiry)
-    disc  = exp(-rate * expiry)
+    disc = exp(-rate * expiry)
 
-    V    = _target_payoffs(option, paths, disc)
-    C    = disc .* payoff.(control.option, paths[:, end])
-    β    = compute_beta(control.β, V, C)
-    V_cv = V .- β .* (C .- c_bsm)
+    V = disc .* _collect_payoffs(option, paths)
+    C = disc .* payoff.(control.option, paths[:, end])
+    beta = compute_beta(control.beta, V, C)
+    V_cv = V .- beta .* (C .- c_bsm)
 
     return SimulationResult(mean(V_cv), std(V_cv) / sqrt(model.reps))
 end

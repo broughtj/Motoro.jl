@@ -43,6 +43,9 @@ end
 HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy) =
     HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy)
 
+HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, method::VarianceReductionMethod) =
+    HedgedMonteCarlo(steps, reps, method, strategy)
+
 
 """
     StopLoss(mu) <: HedgeStrategy
@@ -56,8 +59,8 @@ expected return used when simulating asset paths.
 
 # Examples
 ```julia
-data  = MarketData(41.0, 0.08, 0.30, 0.0)
-call  = EuropeanCall(40.0, 1.0)
+data = MarketData(41.0, 0.08, 0.30, 0.0)
+call = EuropeanCall(40.0, 1.0)
 
 price(call, HedgedMonteCarlo(100, 10_000, StopLoss(0.10)), data)
 ```
@@ -89,8 +92,8 @@ A [`SimulationResult`](@ref) with the mean hedging cost and its standard error.
 
 # Examples
 ```julia
-data  = MarketData(41.0, 0.08, 0.30, 0.0)
-call  = EuropeanCall(40.0, 1.0)
+data = MarketData(41.0, 0.08, 0.30, 0.0)
+call = EuropeanCall(40.0, 1.0)
 
 result = price(call, HedgedMonteCarlo(100, 10_000, StopLoss(0.10)), data)
 result.price  # mean hedge cost
@@ -106,7 +109,7 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
     (; spot, rate, vol, div) = data
 
     dt = expiry / steps
-    dfs = exp.(-rate * collect(0:1:steps) * dt)
+    dfs = exp.(-rate * collect(0:steps) * dt)
     cost = zeros(reps)
     paths = asset_paths(method, model, spot, mu, vol, expiry)
 
@@ -121,10 +124,10 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
         end
 
         for t in 2:steps+1
-            if (covered == 1) & (paths[k, t] < strike)
+            if (covered == 1) && (paths[k, t] < strike)
                 covered = 0
                 cash_flows[t] = paths[k, t]
-            elseif (covered == 0) & (paths[k, t] > strike)
+            elseif (covered == 0) && (paths[k, t] > strike)
                 covered = 1
                 cash_flows[t] = -paths[k, t]
             end
@@ -206,22 +209,23 @@ function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::
     (; mu) = strategy
     (; spot, rate, vol, div) = data
 
-    dt   = expiry / steps
-    dfs  = exp.(-rate * collect(0:steps) * dt)
+    dt = expiry / steps
+    dfs = exp.(-rate * collect(0:steps) * dt)
     cost = zeros(reps)
 
     paths = asset_paths(method, model, spot, mu, vol, expiry)
 
     for k in 1:reps
-        path       = paths[k, :]
-        position   = 0.0
+        path = paths[k, :]
+        position = 0.0
         cash_flows = zeros(steps + 1)
 
         for j in 1:steps
-            τ              = expiry - (j - 1) * dt
-            Δ              = delta(EuropeanCall(option.strike, τ), BlackScholes(), MarketData(path[j], data.rate, data.vol, data.div))
-            cash_flows[j]  = (position - Δ) * path[j]
-            position       = Δ
+            tau = expiry - (j - 1) * dt
+            mkt = MarketData(path[j], data.rate, data.vol, data.div)
+            delta_t = delta(EuropeanCall(option.strike, tau), BlackScholes(), mkt)
+            cash_flows[j] = (position - delta_t) * path[j]
+            position = delta_t
         end
 
         # Settle delivery at expiry

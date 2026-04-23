@@ -95,13 +95,9 @@ Compute the payoff of a binary option at a given terminal spot price.
 - `CashOrNothingCall`: `option.cash` if `spot > option.strike`, else `0.0`
 - `CashOrNothingPut`:  `option.cash` if `spot < option.strike`, else `0.0`
 """
-function payoff(option::CashOrNothingCall, spot)
-    return spot > option.strike ? option.cash : 0.0
-end
+payoff(option::CashOrNothingCall, spot) = spot > option.strike ? option.cash : 0.0
 
-function payoff(option::CashOrNothingPut, spot)
-    return spot < option.strike ? option.cash : 0.0
-end
+payoff(option::CashOrNothingPut, spot) = spot < option.strike ? option.cash : 0.0
 
 
 """
@@ -240,21 +236,13 @@ Compute the payoff of a lookback option from a simulated asset price path.
 - `FloatingPriceLookbackCall`: `max(0, S_max - K)`
 - `FloatingPriceLookbackPut`: `max(0, K - S_min)`
 """
-function payoff(option::FloatingStrikeLookbackCall, path)
-    return max(path[end] - minimum(path), 0.0)
-end
+payoff(option::FloatingStrikeLookbackCall, path) = max(path[end] - minimum(path), 0.0)
 
-function payoff(option::FloatingStrikeLookbackPut, path)
-    return max(maximum(path) - path[end], 0.0)
-end
+payoff(option::FloatingStrikeLookbackPut, path) = max(maximum(path) - path[end], 0.0)
 
-function payoff(option::FloatingPriceLookbackCall, path)
-    return max(0.0, maximum(path) - option.strike)
-end
+payoff(option::FloatingPriceLookbackCall, path) = max(0.0, maximum(path) - option.strike)
 
-function payoff(option::FloatingPriceLookbackPut, path)
-    return max(0.0, option.strike - minimum(path))
-end
+payoff(option::FloatingPriceLookbackPut, path) = max(0.0, option.strike - minimum(path))
 
 
 ## Arithmetic Asian Options
@@ -370,18 +358,11 @@ Compute the payoff of an arithmetic Asian option from a simulated asset price pa
 - `FloatingPriceArithmeticAsianCall`: `max(0, Ā - K)`
 - `FloatingPriceArithmeticAsianPut`: `max(0, K - Ā)`
 """
-function payoff(option::FloatingStrikeArithmeticAsianCall, path)
-    return max(0.0, path[end] - mean(path))
-end
+payoff(option::FloatingStrikeArithmeticAsianCall, path) = max(0.0, path[end] - mean(path))
 
-function payoff(option::FloatingStrikeArithmeticAsianPut, path)
-    return max(0.0, mean(path) - path[end])
-end
+payoff(option::FloatingStrikeArithmeticAsianPut, path) = max(0.0, mean(path) - path[end])
 
-function payoff(option::FloatingPriceArithmeticAsianCall, path)
-    return max(0.0, mean(path) - option.strike)
-end
+payoff(option::FloatingPriceArithmeticAsianCall, path) =
+    max(0.0, mean(path) - option.strike)
 
-function payoff(option::FloatingPriceArithmeticAsianPut, path)
-    return max(0.0, option.strike - mean(path))
-end
+payoff(option::FloatingPriceArithmeticAsianPut, path) = max(0.0, option.strike - mean(path))

@@ -35,6 +35,23 @@ call = EuropeanCall(40.0, 1.0)   # ATM call, 1 year to expiry
 put  = EuropeanPut(40.0, 1.0)    # ATM put,  1 year to expiry
 ```
 
+## Examples
+
+Annotated example scripts are in `examples/`. Each file is self-contained and can be
+run directly or `include`d from the REPL:
+
+| File | Topic |
+|---|---|
+| `01_basic_pricing.jl` | BSM, Binomial, put-call parity, delta, convergence |
+| `02_monte_carlo.jl` | `RiskNeutralMonteCarlo`, variance reduction, convergence with budget |
+| `03_exotic_options.jl` | Binary, lookback, and Asian options; monitoring frequency |
+| `04_hedging.jl` | Stop-loss vs delta hedging; BSM convergence; drift invariance |
+| `05_control_variate.jl` | `ControlVariateMonteCarlo`; optimal vs fixed beta; stacking with antithetic |
+
+```julia
+include("examples/01_basic_pricing.jl")
+```
+
 ## Pricing Methods
 
 ### Black-Scholes-Merton (analytical)
@@ -185,8 +202,10 @@ a `HedgeStrategy` that specifies the strategy and its real-world drift `mu`.
 ### Stop-Loss Hedge
 
 A naive strategy that holds the underlying whenever the spot is above the strike and
-holds cash otherwise. As `steps → ∞` the hedge cost converges to the BSM price,
-regardless of the real-world drift — illustrating that hedging cost is measure-independent.
+holds cash otherwise. The expected hedge cost is strictly greater than the BSM price
+at any step frequency — unlike delta hedging, stop-loss does not converge to BSM as
+`steps → ∞` because the strategy itself is sub-optimal (it always buys high and sells
+low at the strike boundary).
 
 ```julia
 model = HedgedMonteCarlo(100, 50_000, StopLoss(0.10))   # mu = 10%
@@ -209,11 +228,11 @@ result.price   # mean hedge cost (→ BSM as steps → ∞)
 result.std     # standard error
 ```
 
-Variance reduction works with both hedge strategies — pass the `VarianceReduction`
-before the strategy:
+Variance reduction works with both hedge strategies — pass the strategy before the
+optional `VarianceReduction` method:
 
 ```julia
-model = HedgedMonteCarlo(100, 50_000, VarianceReduction(PseudoRandom(), Antithetic()), StopLoss(0.10))
+model = HedgedMonteCarlo(100, 50_000, StopLoss(0.10), VarianceReduction(PseudoRandom(), Antithetic()))
 price(call, model, data)
 ```
 
@@ -253,7 +272,7 @@ HedgeStrategy (abstract)
 └── DeltaHedge(mu)
 
 BetaMethod (abstract)
-├── FixedBeta(β)
+├── FixedBeta(beta)
 └── OptimalBeta
 ```
 

@@ -92,7 +92,7 @@ The primary API is `price(option, model, data)`. Julia multiple dispatch routes 
 - **Vanilla and Binary options**: `payoff(option, spot::Number)` — takes a scalar terminal price
 - **Lookback and Asian options**: `payoff(option, path::AbstractVector)` — takes a full simulated path
 
-`BinaryOption <: ExoticOption`, but binary payoffs use the terminal-spot signature. The internal `_target_payoffs` helper in `ControlVariateMonteCarlo`'s `price` method handles this dispatch correctly — do not collapse it.
+`BinaryOption <: ExoticOption`, but binary payoffs use the terminal-spot signature. The internal `_collect_payoffs` helper in `ControlVariateMonteCarlo`'s `price` method handles this dispatch correctly — do not collapse it.
 
 ### VarianceReduction
 
@@ -104,7 +104,20 @@ The primary API is `price(option, model, data)`. Julia multiple dispatch routes 
 2. Add `price` method(s) to the relevant model file (`analytical.jl`, `montecarlo.jl`, etc.)
 3. Export from `Motoro.jl`
 
-If the new option is path-dependent, use the `payoff(option, path::AbstractVector)` signature and make it a subtype of an appropriate `ExoticOption` child. If it is terminal-price-only (like `BinaryOption`), add a `_target_payoffs` dispatch for it alongside the existing `BinaryOption` and `VanillaOption` dispatches in `control_variate.jl`.
+If the new option is path-dependent, use the `payoff(option, path::AbstractVector)` signature and make it a subtype of an appropriate `ExoticOption` child. If it is terminal-price-only (like `BinaryOption`), add a `_collect_payoffs` dispatch for it alongside the existing `BinaryOption` and `VanillaOption` dispatches in `control_variate.jl`.
+
+## Code style
+
+All source files follow [BlueStyle](https://github.com/JuliaDiff/BlueStyle). Key rules to enforce on every change:
+
+- **Line length**: 92-character limit. Split long lines at operators or with an intermediate variable.
+- **No alignment padding**: do not add spaces to vertically align `=`, `::`, or argument lists across lines.
+- **Short-form functions**: use `f(x) = ...` for single-expression methods; `function ... end` only when the body spans multiple lines.
+- **Operators**: use `&&` / `||`, never `&` / `|` for boolean logic.
+- **Arithmetic spacing**: spaces around binary operators (`j - 1`, `steps + 1`), not `j-1`.
+- **Range literals**: parenthesise non-trivial endpoints — `2:(steps + 1)`, not `2:steps+1`.
+- **Variable names**: ASCII only — no Greek letters (`beta` not `β`, `tau` not `τ`, `delta_t` not `Δ`).
+- **Example scripts**: wrap every `for` loop in a `let` block to avoid Julia soft-scope warnings when the file is `include`d from the REPL.
 
 ### Parametric structs and constructors
 
