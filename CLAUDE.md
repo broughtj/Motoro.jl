@@ -15,13 +15,15 @@ Motoro/
     options.jl         # Vanilla option types and payoff methods
     exotic.jl          # Exotic option types and payoff methods (Binary, Lookback, Asian)
     analytical.jl      # Binomial, BlackScholes + price/delta methods
+    historical.jl      # HistoricalData, log_returns
+    dynamics.jl        # AssetDynamics, GeometricBrownianMotion, JumpDiffusion, StationaryBootstrap
     montecarlo.jl      # VarianceReduction infrastructure, RiskNeutralMonteCarlo, asset_paths
-    hedging.jl         # HedgeStrategy, HedgedMonteCarlo, StopLoss, DeltaHedge
+    hedging.jl         # HedgeStrategy, HedgedMonteCarlo, StopLoss, DeltaHedge + bootstrap asset_paths
     control_variate.jl # BetaMethod, ControlVariate, ControlVariateMonteCarlo
   Project.toml
 ```
 
-Include order in `Motoro.jl` is load-order dependent: `results` before pricing methods, `options` and `exotic` before analytical models, `analytical` before `hedging` (DeltaHedge calls `delta()`).
+Include order in `Motoro.jl` is load-order dependent: `results` before pricing methods, `options` and `exotic` before analytical models, `analytical` before `hedging` (DeltaHedge calls `delta()`), `historical` before `dynamics` (`StationaryBootstrap` references `HistoricalData`), `dynamics` before `montecarlo` (MonteCarlo structs reference `AssetDynamics`).
 
 Instructor-only scripts (`hedge_comparison.jl`, `convergence.jl`, `exam_q3.jl`) sit in `Motoro/` but are not part of the package.
 
@@ -67,16 +69,20 @@ ExoticOption
 └── ArithmeticAsianOption → FloatingStrike{Call,Put}, FloatingPrice{Call,Put}
 ```
 
-**Models** (`analytical.jl`, `montecarlo.jl`, `hedging.jl`, `control_variate.jl`):
+**Models** (`analytical.jl`, `historical.jl`, `dynamics.jl`, `montecarlo.jl`, `hedging.jl`, `control_variate.jl`):
 ```
 MonteCarlo (abstract)
-├── RiskNeutralMonteCarlo(steps, reps[, method])
-├── HedgedMonteCarlo{S<:HedgeStrategy}(steps, reps, method, strategy)
-└── ControlVariateMonteCarlo{CV}(steps, reps, method, control)    [instructor]
+├── RiskNeutralMonteCarlo(steps, reps[, method][, dynamics])
+├── HedgedMonteCarlo{S<:HedgeStrategy}(steps, reps, method, strategy, dynamics)
+└── ControlVariateMonteCarlo{CV}(steps, reps, method, control, dynamics)    [instructor]
 
-HedgeStrategy → StopLoss(mu), DeltaHedge(mu)                     [instructor]
-BetaMethod    → FixedBeta(β), OptimalBeta                         [instructor]
-ControlVariate{O, B<:BetaMethod}                                  [instructor]
+AssetDynamics → GeometricBrownianMotion
+              → JumpDiffusion(lambda, alpha_j, sigma_j)
+              → StationaryBootstrap(data, mean_block_length)   # HedgedMonteCarlo only
+HistoricalData(returns) / HistoricalData(filepath)             # used by StationaryBootstrap
+HedgeStrategy → StopLoss(mu), DeltaHedge(mu)                  [instructor]
+BetaMethod    → FixedBeta(beta), OptimalBeta                   [instructor]
+ControlVariate{O, B<:BetaMethod}                               [instructor]
 
 PricingResult → AnalyticResult(price), SimulationResult(price, std)
 ```
@@ -97,6 +103,16 @@ The primary API is `price(option, model, data)`. Julia multiple dispatch routes 
 ### VarianceReduction
 
 `VarianceReduction{D<:DrawMethod, P<:PairingMethod}` composes independently along two axes: draw method (`PseudoRandom`, `Stratified`) and pairing (`NoPairing`, `Antithetic`). It is the `method` field on all `MonteCarlo` subtypes. Default is `VarianceReduction(PseudoRandom(), NoPairing())`.
+
+### AssetDynamics
+
+`AssetDynamics` is the `dynamics` field on all `MonteCarlo` subtypes. It controls how asset price paths are generated. Default is `GeometricBrownianMotion()`.
+
+- `GeometricBrownianMotion` — standard GBM; no parameters. Defined in `dynamics.jl`.
+- `JumpDiffusion(lambda, alpha_j, sigma_j)` — Merton (1976) jump diffusion. Defined in `dynamics.jl`.
+- `StationaryBootstrap(data, mean_block_length)` — resamples from historical log-returns (Politis & Romano 1994). Defined in `dynamics.jl`; `asset_paths` method lives in `hedging.jl` because it is restricted to `HedgedMonteCarlo`. Using it with any other `MonteCarlo` subtype raises a `MethodError` by design — the resampled paths are under the P measure and cannot be risk-neutralized.
+
+`asset_paths(model, spot, rate, vol, expiry)` is the public API. Internally it dispatches to `asset_paths(method, dynamics, model, ...)`. New dynamics types are added by defining a new `asset_paths` method for the new subtype — in `montecarlo.jl` for Q-measure dynamics, in `hedging.jl` if the dynamics is P-measure only. `VarianceReduction` and `AssetDynamics` compose freely for GBM and JumpDiffusion; `StationaryBootstrap` ignores the `VarianceReduction` method argument (accepted for dispatch consistency only).
 
 ### Adding new option types
 

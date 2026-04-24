@@ -5,6 +5,8 @@ include("results.jl")
 include("options.jl")
 include("exotic.jl")
 include("analytical.jl")
+include("historical.jl")
+include("dynamics.jl")
 include("montecarlo.jl")
 include("hedging.jl")
 include("control_variate.jl")
@@ -33,6 +35,8 @@ export MonteCarlo, RiskNeutralMonteCarlo
 export VarianceReductionMethod, VarianceReduction
 export DrawMethod, PseudoRandom, Stratified
 export PairingMethod, NoPairing, Antithetic
+export HistoricalData, log_returns
+export AssetDynamics, GeometricBrownianMotion, JumpDiffusion, StationaryBootstrap
 export asset_paths
 
 # Hedging

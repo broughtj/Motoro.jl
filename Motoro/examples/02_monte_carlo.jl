@@ -106,7 +106,7 @@ end
 # simulated price path; column 1 is the initial spot price.
 
 model = RiskNeutralMonteCarlo(52, 1_000)   # 52 weekly steps, 1000 paths
-paths = asset_paths(model.method, model, data.spot, data.rate, data.vol, call.expiry)
+paths = asset_paths(model, data.spot, data.rate, data.vol, call.expiry)
 
 size(paths)        # (1000, 53)
 paths[1, :]        # first simulated path

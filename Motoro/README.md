@@ -2,8 +2,9 @@
 
 A Julia package for teaching computational options pricing. Motoro implements classical
 pricing methods — binomial trees, Black-Scholes-Merton, and Monte Carlo simulation —
-alongside exotic options, hedging strategies, and variance reduction techniques, with a
-focus on clarity and pedagogical value.
+alongside exotic options, hedging strategies, variance reduction techniques, and
+empirical path simulation from historical data, with a focus on clarity and
+pedagogical value.
 
 ## Installation
 
@@ -47,6 +48,8 @@ run directly or `include`d from the REPL:
 | `03_exotic_options.jl` | Binary, lookback, and Asian options; monitoring frequency |
 | `04_hedging.jl` | Stop-loss vs delta hedging; BSM convergence; drift invariance |
 | `05_control_variate.jl` | `ControlVariateMonteCarlo`; optimal vs fixed beta; stacking with antithetic |
+| `06_dynamics.jl` | `GeometricBrownianMotion` vs `JumpDiffusion`; parameter sensitivity; implied vol smile |
+| `07_bootstrap.jl` | `StationaryBootstrap` with `HedgedMonteCarlo`; block length and history length effects; real SPY data; specification vs distribution error |
 
 ```julia
 include("examples/01_basic_pricing.jl")
@@ -114,6 +117,34 @@ price(call, mc_anti, data)
 mc_strat = RiskNeutralMonteCarlo(100, 10_000, VarianceReduction(Stratified(), NoPairing()))
 price(call, mc_strat, data)
 ```
+
+#### Asset Dynamics
+
+All Monte Carlo types accept an optional `AssetDynamics` argument that controls how
+paths are generated. The default is `GeometricBrownianMotion()`.
+
+`JumpDiffusion(lambda, alpha_j, sigma_j)` adds a compound Poisson jump process
+(Merton 1976) to the GBM diffusion. Jumps are most significant for out-of-the-money
+options and produce a volatility smile when prices are inverted through BSM.
+
+```julia
+jd = JumpDiffusion(3.0, -0.02, 0.05)   # ~3 jumps/year, negative mean jump
+
+# Jump diffusion pricing (dynamics as third argument)
+price(call, RiskNeutralMonteCarlo(252, 10_000, jd), data)
+
+# Combined with variance reduction (method before dynamics)
+av = VarianceReduction(PseudoRandom(), Antithetic())
+price(call, RiskNeutralMonteCarlo(252, 10_000, av, jd), data)
+```
+
+`AssetDynamics` and `VarianceReduction` compose freely — any combination is supported
+across all three Monte Carlo model types.
+
+`StationaryBootstrap` is a third dynamics type that resamples from historical
+log-returns (Politis & Romano 1994). Because the resampled paths reflect the
+real-world (P) return distribution, it can only be used with `HedgedMonteCarlo`.
+See [Historical Data](#historical-data) below.
 
 #### `ControlVariateMonteCarlo` — variance reduction via a correlated control
 
@@ -236,6 +267,51 @@ model = HedgedMonteCarlo(100, 50_000, StopLoss(0.10), VarianceReduction(PseudoRa
 price(call, model, data)
 ```
 
+## Historical Data
+
+`HistoricalData` stores a time series of continuously compounded log-returns and
+is the data source for `StationaryBootstrap` path simulation.
+
+```julia
+# From a price vector — compute returns explicitly
+prices = [100.0, 102.3, 101.8, 103.5]
+hist   = HistoricalData(log_returns(prices))
+
+# From a CSV file of prices (one price per row)
+hist = HistoricalData("SPY.csv")              # prices in column 1, header row
+hist = HistoricalData("data.csv"; col=2)      # prices in second column
+hist = HistoricalData("raw.csv"; header=false)
+```
+
+`log_returns(prices)` is also exported as a standalone helper for computing
+`log(S_t / S_{t-1})` from any price vector.
+
+`examples/data/SPY_close.csv` contains 5 years of daily SPY closing prices and
+is used in example `07_bootstrap.jl` to demonstrate the file-based constructor
+and the difference between assumed, realized, and empirical hedge costs.
+
+### Stationary Bootstrap
+
+`StationaryBootstrap(data, mean_block_length)` resamples blocks of historical
+returns with geometrically distributed lengths, preserving the serial dependence
+structure of the original series.
+
+```julia
+hist   = HistoricalData("SPY.csv")
+bs     = StationaryBootstrap(hist, 20)   # ~20-day mean block length
+
+data   = MarketData(450.0, 0.05, 0.20, 0.0)
+call   = EuropeanCall(450.0, 1.0)
+
+# Only valid with HedgedMonteCarlo (P-measure simulation)
+result = price(call, HedgedMonteCarlo(252, 10_000, DeltaHedge(0.10), bs), data)
+result.price   # empirical hedge cost
+result.std     # standard error
+```
+
+Using `StationaryBootstrap` with `RiskNeutralMonteCarlo` raises a `MethodError` —
+the restriction is enforced by the type system.
+
 ## Type Hierarchy
 
 ```
@@ -262,10 +338,17 @@ ExoticOption
     ├── FloatingPriceArithmeticAsianCall(strike, expiry)
     └── FloatingPriceArithmeticAsianPut(strike, expiry)
 
+AssetDynamics (abstract)
+├── GeometricBrownianMotion
+├── JumpDiffusion(lambda, alpha_j, sigma_j)
+└── StationaryBootstrap(data, mean_block_length)   # HedgedMonteCarlo only
+
+HistoricalData(returns)                            # also: HistoricalData(filepath)
+
 MonteCarlo (abstract)
-├── RiskNeutralMonteCarlo(steps, reps[, method])
-├── HedgedMonteCarlo(steps, reps, strategy[, method])
-└── ControlVariateMonteCarlo(steps, reps, control[, method])
+├── RiskNeutralMonteCarlo(steps, reps[, method][, dynamics])
+├── HedgedMonteCarlo(steps, reps, strategy[, method][, dynamics])
+└── ControlVariateMonteCarlo(steps, reps, control[, method][, dynamics])
 
 HedgeStrategy (abstract)
 ├── StopLoss(mu)
@@ -300,6 +383,7 @@ payoff(FloatingPriceLookbackPut(100.0, 1.0), path)   # max(0, 100.0 - 95.0) = 5.
 ## Dependencies
 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
+- [DelimitedFiles](https://docs.julialang.org/en/v1/stdlib/DelimitedFiles/) (standard library)
 - [LinearAlgebra](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/) (standard library)
 - [Statistics](https://docs.julialang.org/en/v1/stdlib/Statistics/) (standard library)
 

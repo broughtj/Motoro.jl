@@ -38,13 +38,17 @@ struct HedgedMonteCarlo{S<:HedgeStrategy} <: MonteCarlo
     reps::Int
     method::VarianceReductionMethod
     strategy::S
+    dynamics::AssetDynamics
 end
 
 HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy) =
-    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy)
+    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy, GeometricBrownianMotion())
 
 HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, method::VarianceReductionMethod) =
-    HedgedMonteCarlo(steps, reps, method, strategy)
+    HedgedMonteCarlo(steps, reps, method, strategy, GeometricBrownianMotion())
+
+HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, dynamics::AssetDynamics) =
+    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy, dynamics)
 
 
 """
@@ -111,7 +115,7 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
     dt = expiry / steps
     dfs = exp.(-rate * collect(0:steps) * dt)
     cost = zeros(reps)
-    paths = asset_paths(method, model, spot, mu, vol, expiry)
+    paths = asset_paths(model, spot, mu, vol, expiry)
 
     for k in 1:reps
         cash_flows = zeros(steps + 1)
@@ -213,7 +217,7 @@ function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::
     dfs = exp.(-rate * collect(0:steps) * dt)
     cost = zeros(reps)
 
-    paths = asset_paths(method, model, spot, mu, vol, expiry)
+    paths = asset_paths(model, spot, mu, vol, expiry)
 
     for k in 1:reps
         path = paths[k, :]
@@ -239,4 +243,58 @@ function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::
     end
 
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
+end
+
+
+# Internal: apply the stationary bootstrap resampling scheme to `indices` in-place.
+# On each step, the block continues (indices[i] = indices[i-1] + 1) with
+# probability 1-p, or a new block starts at a fresh random index with
+# probability p. Indices wrap around at n_hist to stay within the history.
+function _stationary_bootstrap_sample!(indices::Vector{Int}, u::Vector{Float64},
+        p::Float64, n_hist::Int)
+    for i in 2:length(indices)
+        if u[i] > p
+            indices[i] = indices[i - 1] + 1
+            if indices[i] > n_hist
+                indices[i] = 1
+            end
+        end
+    end
+    return indices
+end
+
+
+"""
+    asset_paths(method, dynamics::StationaryBootstrap, model::HedgedMonteCarlo, ...)
+
+Generate asset price paths by resampling from historical log-returns using the
+stationary bootstrap.
+
+Restricted to [`HedgedMonteCarlo`](@ref) because the resampled paths reflect the
+real-world (P) return distribution. The `method` argument is accepted for dispatch
+consistency but has no effect — variance reduction does not apply to bootstrap
+resampling.
+
+See also: [`StationaryBootstrap`](@ref), [`HistoricalData`](@ref)
+"""
+function asset_paths(method::VarianceReduction, bs::StationaryBootstrap,
+        model::HedgedMonteCarlo, spot, rate, vol, expiry)
+    (; steps, reps) = model
+    returns = bs.data.returns
+    n_hist = length(returns)
+    p = 1.0 / bs.mean_block_length
+
+    paths = zeros(reps, steps + 1)
+    paths[:, 1] .= spot
+
+    for k in 1:reps
+        indices = rand(1:n_hist, steps)
+        u = rand(steps)
+        _stationary_bootstrap_sample!(indices, u, p, n_hist)
+        for j in 1:steps
+            paths[k, j + 1] = paths[k, j] * exp(returns[indices[j]])
+        end
+    end
+
+    return paths
 end

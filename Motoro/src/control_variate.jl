@@ -112,15 +112,21 @@ struct ControlVariateMonteCarlo{CV<:ControlVariate} <: MonteCarlo
     reps::Int
     method::VarianceReductionMethod
     control::CV
+    dynamics::AssetDynamics
 end
 
 ControlVariateMonteCarlo(steps::Int, reps::Int, control::ControlVariate) =
     ControlVariateMonteCarlo(steps, reps,
-        VarianceReduction(PseudoRandom(), NoPairing()), control)
+        VarianceReduction(PseudoRandom(), NoPairing()), control, GeometricBrownianMotion())
 
 ControlVariateMonteCarlo(steps::Int, reps::Int, control::ControlVariate,
         method::VarianceReductionMethod) =
-    ControlVariateMonteCarlo(steps, reps, method, control)
+    ControlVariateMonteCarlo(steps, reps, method, control, GeometricBrownianMotion())
+
+ControlVariateMonteCarlo(steps::Int, reps::Int, control::ControlVariate,
+        dynamics::AssetDynamics) =
+    ControlVariateMonteCarlo(steps, reps,
+        VarianceReduction(PseudoRandom(), NoPairing()), control, dynamics)
 
 
 # Internal: collect undiscounted payoffs for a target option from simulated paths.
@@ -157,7 +163,7 @@ function price(option, model::ControlVariateMonteCarlo, data::MarketData)
 
     c_bsm = price(control.option, BlackScholes(), data).price
 
-    paths = asset_paths(model.method, model, spot, rate, vol, expiry)
+    paths = asset_paths(model, spot, rate, vol, expiry)
     disc = exp(-rate * expiry)
 
     V = disc .* _collect_payoffs(option, paths)
