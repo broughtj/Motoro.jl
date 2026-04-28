@@ -631,3 +631,70 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
 
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
+
+
+# Q8 Additions: Delta/Gamma Control Variate Hedging
+
+
+
+function gamma(option::EuropeanCall, model::BlackScholes, data::MarketData)
+    (; strike, expiry) = option
+    (; spot, rate, vol, div) = data
+    d1 = (log(spot / strike) + (rate - div + 0.5 * vol^2) * expiry) / (vol * sqrt(expiry))
+    return exp(-div * expiry) * pdf(Normal(0.0, 1.0), d1) / (spot * vol * sqrt(expiry))
+end
+
+function gamma(option::EuropeanPut, model::BlackScholes, data::MarketData)
+    call = EuropeanCall(option.strike, option.expiry)
+    return gamma(call, model, data)
+end
+
+struct DeltaHedge <: HedgeStrategy
+    beta1::Float64
+    beta2::Float64
+end
+
+DeltaHedge() = DeltaHedge(-1.0, 0.0)
+DeltaHedge(b1::Float64) = DeltaHedge(b1, 0.0)
+
+function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
+    (; strike, expiry) = option
+    (; spot, rate, vol, div) = data
+    (; steps, reps, method, strategy) = model
+    (; beta1, beta2) = strategy
+
+    dt = expiry / steps
+    disc = exp(-rate * expiry)
+    use_gamma = beta2 != 0.0
+
+    paths = asset_paths(method, model, spot, rate, vol, expiry)
+    payoffs = zeros(reps)
+
+    @inbounds for k in 1:reps
+        cv1 = 0.0
+        cv2 = 0.0
+
+        for i in 1:steps
+            Si  = paths[k, i]
+            Si1 = paths[k, i+1]
+            tau_i = expiry - (i - 1) * dt
+            data_i = MarketData(Si, rate, vol, div)
+            opt_i  = EuropeanCall(strike, tau_i)
+
+            Δi   = delta(opt_i, BlackScholes(), data_i)
+            cv1 += Δi * (Si1 - Si * exp((rate - div) * dt))
+
+            if use_gamma
+                Γi  = gamma(opt_i, BlackScholes(), data_i)
+                e_γ = exp((2.0 * (rate - div) + vol^2) * dt) -
+                      2.0 * exp((rate - div) * dt) + 1.0
+                cv2 += Γi * ((Si1 - Si)^2 - Si^2 * e_γ)
+            end
+        end
+
+        payoffs[k] = max(0.0, paths[k, end] - strike) + beta1 * cv1 + beta2 * cv2
+    end
+
+    disc_payoffs = disc .* payoffs
+    return SimulationResult(mean(disc_payoffs), std(disc_payoffs) / sqrt(reps))
+end
