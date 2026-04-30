@@ -60,6 +60,9 @@ end
 
 Base.broadcastable(x::EuropeanCall) = Ref(x)
 
+EuropeanCall(strike::Real, expiry::Real) =
+    EuropeanCall(promote(float(strike), float(expiry))...)
+
 """
     payoff(option::VanillaOption, spot)
 
@@ -122,6 +125,9 @@ end
 
 Base.broadcastable(x::EuropeanPut) = Ref(x)
 
+EuropeanPut(strike::Real, expiry::Real) =
+    EuropeanPut(promote(float(strike), float(expiry))...)
+
 payoff(option::EuropeanPut, spot) = max(0.0, option.strike - spot)
 
 
@@ -157,6 +163,9 @@ end
 
 Base.broadcastable(x::AmericanCall) = Ref(x)
 
+AmericanCall(strike::Real, expiry::Real) =
+    AmericanCall(promote(float(strike), float(expiry))...)
+
 payoff(option::AmericanCall, spot) = max(0.0, spot - option.strike)
 
 
@@ -190,5 +199,8 @@ struct AmericanPut{T<:AbstractFloat} <: AmericanOption
 end
 
 Base.broadcastable(x::AmericanPut) = Ref(x)
+
+AmericanPut(strike::Real, expiry::Real) =
+    AmericanPut(promote(float(strike), float(expiry))...)
 
 payoff(option::AmericanPut, spot) = max(0.0, option.strike - spot)

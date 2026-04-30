@@ -7,7 +7,8 @@ Market parameters for option pricing.
 - `spot::T`: Current spot price of the underlying asset
 - `rate::T`: Risk-free interest rate (annualized, as decimal, e.g., 0.05 for 5%)
 - `vol::T`: Volatility (annualized standard deviation, as decimal, e.g., 0.2 for 20%)
-- `div::T`: Continuous dividend yield (annualized, as decimal; use 0.0 for non-dividend paying assets)
+- `div::T`: Continuous dividend yield (annualized, as decimal; use 0.0 for
+  non-dividend paying assets)
 
 # Examples
 ```julia

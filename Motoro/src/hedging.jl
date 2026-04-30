@@ -20,7 +20,8 @@ rather than the risk-free rate.
 # Fields
 - `steps::Int`: Number of time steps per simulation path
 - `reps::Int`: Number of simulation paths (replications)
-- `method::VarianceReductionMethod`: Variance reduction strategy (default: `PseudoRandom` with `NoPairing`)
+- `method::VarianceReductionMethod`: Variance reduction strategy (default: `PseudoRandom`
+  with `NoPairing`)
 - `strategy::HedgeStrategy`: The hedging strategy to evaluate (e.g., [`StopLoss`](@ref))
 
 # Examples
@@ -31,7 +32,8 @@ call = EuropeanCall(40.0, 1.0)
 price(call, HedgedMonteCarlo(100, 10_000, StopLoss(0.10)), data)
 ```
 
-See also: [`MonteCarlo`](@ref), [`RiskNeutralMonteCarlo`](@ref), [`HedgeStrategy`](@ref), [`StopLoss`](@ref)
+See also: [`MonteCarlo`](@ref), [`RiskNeutralMonteCarlo`](@ref), [`HedgeStrategy`](@ref),
+[`StopLoss`](@ref)
 """
 struct HedgedMonteCarlo{S<:HedgeStrategy} <: MonteCarlo
     steps::Int
@@ -42,13 +44,16 @@ struct HedgedMonteCarlo{S<:HedgeStrategy} <: MonteCarlo
 end
 
 HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy) =
-    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy, GeometricBrownianMotion())
+    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
+        strategy, GeometricBrownianMotion())
 
-HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, method::VarianceReductionMethod) =
+HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy,
+        method::VarianceReductionMethod) =
     HedgedMonteCarlo(steps, reps, method, strategy, GeometricBrownianMotion())
 
 HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, dynamics::AssetDynamics) =
-    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy, dynamics)
+    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
+        strategy, dynamics)
 
 
 """
@@ -127,7 +132,7 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
             covered = 0
         end
 
-        for t in 2:steps+1
+        for t in 2:(steps + 1)
             if (covered == 1) && (paths[k, t] < strike)
                 covered = 0
                 cash_flows[t] = paths[k, t]

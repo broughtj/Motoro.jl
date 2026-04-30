@@ -54,6 +54,10 @@ CashOrNothingCall(strike::T, expiry::T) where {T<:AbstractFloat} =
 
 Base.broadcastable(x::CashOrNothingCall) = Ref(x)
 
+CashOrNothingCall(strike::Real, expiry::Real, cash::Real) =
+    CashOrNothingCall(promote(float(strike), float(expiry), float(cash))...)
+CashOrNothingCall(strike::Real, expiry::Real) = CashOrNothingCall(strike, expiry, 1.0)
+
 """
     CashOrNothingPut(strike, expiry, cash)
 
@@ -86,6 +90,10 @@ CashOrNothingPut(strike::T, expiry::T) where {T<:AbstractFloat} =
 
 Base.broadcastable(x::CashOrNothingPut) = Ref(x)
 
+CashOrNothingPut(strike::Real, expiry::Real, cash::Real) =
+    CashOrNothingPut(promote(float(strike), float(expiry), float(cash))...)
+CashOrNothingPut(strike::Real, expiry::Real) = CashOrNothingPut(strike, expiry, 1.0)
+
 """
     payoff(option::BinaryOption, spot)
 
@@ -117,8 +125,9 @@ abstract type LookbackOption <: ExoticOption end
 Abstract type for arithmetic Asian options, whose payoff depends on the arithmetic
 mean of the asset price over the life of the contract.
 
-See also: [`FloatingStrikeArithmeticAsianCall`](@ref), [`FloatingStrikeArithmeticAsianPut`](@ref),
-[`FloatingPriceArithmeticAsianCall`](@ref), [`FloatingPriceArithmeticAsianPut`](@ref)
+See also: [`FloatingStrikeArithmeticAsianCall`](@ref),
+[`FloatingStrikeArithmeticAsianPut`](@ref), [`FloatingPriceArithmeticAsianCall`](@ref),
+[`FloatingPriceArithmeticAsianPut`](@ref)
 """
 abstract type ArithmeticAsianOption <: ExoticOption end
 
@@ -148,11 +157,14 @@ struct FloatingStrikeLookbackCall{T<:AbstractFloat} <: LookbackOption
     expiry::T
 end
 
+FloatingStrikeLookbackCall(expiry::Real) = FloatingStrikeLookbackCall(float(expiry))
+
 """
     FloatingStrikeLookbackPut(expiry)
 
 A lookback put with a floating strike equal to the maximum asset price over the
-life of the option. At expiration the holder effectively sells at the highest observed price.
+life of the option. At expiration the holder effectively sells at the highest
+observed price.
 
 # Fields
 - `expiry::AbstractFloat`: Time to expiration in years
@@ -170,6 +182,8 @@ See also: [`FloatingStrikeLookbackCall`](@ref), [`payoff`](@ref)
 struct FloatingStrikeLookbackPut{T<:AbstractFloat} <: LookbackOption
     expiry::T
 end
+
+FloatingStrikeLookbackPut(expiry::Real) = FloatingStrikeLookbackPut(float(expiry))
 
 """
     FloatingPriceLookbackCall(strike, expiry)
@@ -196,6 +210,9 @@ struct FloatingPriceLookbackCall{T<:AbstractFloat} <: LookbackOption
     expiry::T
 end
 
+FloatingPriceLookbackCall(strike::Real, expiry::Real) =
+    FloatingPriceLookbackCall(promote(float(strike), float(expiry))...)
+
 """
     FloatingPriceLookbackPut(strike, expiry)
 
@@ -221,6 +238,9 @@ struct FloatingPriceLookbackPut{T<:AbstractFloat} <: LookbackOption
     expiry::T
 end
 
+FloatingPriceLookbackPut(strike::Real, expiry::Real) =
+    FloatingPriceLookbackPut(promote(float(strike), float(expiry))...)
+
 """
     payoff(option::LookbackOption, path)
 
@@ -228,7 +248,8 @@ Compute the payoff of a lookback option from a simulated asset price path.
 
 # Arguments
 - `option::LookbackOption`: The lookback option contract
-- `path`: Vector of asset prices along one simulated path (first element is spot at inception)
+- `path`: Vector of asset prices along one simulated path (first element is spot at
+  inception)
 
 # Returns
 - `FloatingStrikeLookbackCall`: `S_T - S_min`
@@ -270,6 +291,9 @@ struct FloatingStrikeArithmeticAsianCall{T<:AbstractFloat} <: ArithmeticAsianOpt
     expiry::T
 end
 
+FloatingStrikeArithmeticAsianCall(expiry::Real) =
+    FloatingStrikeArithmeticAsianCall(float(expiry))
+
 """
     FloatingStrikeArithmeticAsianPut(expiry)
 
@@ -292,6 +316,9 @@ See also: [`FloatingStrikeArithmeticAsianCall`](@ref), [`payoff`](@ref)
 struct FloatingStrikeArithmeticAsianPut{T<:AbstractFloat} <: ArithmeticAsianOption
     expiry::T
 end
+
+FloatingStrikeArithmeticAsianPut(expiry::Real) =
+    FloatingStrikeArithmeticAsianPut(float(expiry))
 
 """
     FloatingPriceArithmeticAsianCall(strike, expiry)
@@ -318,6 +345,9 @@ struct FloatingPriceArithmeticAsianCall{T<:AbstractFloat} <: ArithmeticAsianOpti
     expiry::T
 end
 
+FloatingPriceArithmeticAsianCall(strike::Real, expiry::Real) =
+    FloatingPriceArithmeticAsianCall(promote(float(strike), float(expiry))...)
+
 """
     FloatingPriceArithmeticAsianPut(strike, expiry)
 
@@ -342,6 +372,9 @@ struct FloatingPriceArithmeticAsianPut{T<:AbstractFloat} <: ArithmeticAsianOptio
     strike::T
     expiry::T
 end
+
+FloatingPriceArithmeticAsianPut(strike::Real, expiry::Real) =
+    FloatingPriceArithmeticAsianPut(promote(float(strike), float(expiry))...)
 
 """
     payoff(option::ArithmeticAsianOption, path)

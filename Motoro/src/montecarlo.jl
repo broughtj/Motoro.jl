@@ -67,7 +67,8 @@ Combines a draw method and a pairing method into a variance reduction strategy
 for use with any [`MonteCarlo`](@ref) subtype.
 
 # Fields
-- `draw::DrawMethod`: How to generate random draws ([`PseudoRandom`](@ref) or [`Stratified`](@ref))
+- `draw::DrawMethod`: How to generate random draws ([`PseudoRandom`](@ref) or
+  [`Stratified`](@ref))
 - `pairing::PairingMethod`: Pairing strategy ([`NoPairing`](@ref) or [`Antithetic`](@ref))
 
 # Examples
@@ -93,7 +94,8 @@ Concrete subtypes differ in the pricing measure and variance reduction approach 
 - [`HedgedMonteCarlo`](@ref): real-world hedge cost simulation under the P measure
 - [`ControlVariateMonteCarlo`](@ref): Q-measure pricing with a control variate adjustment
 
-See also: [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref), [`ControlVariateMonteCarlo`](@ref)
+See also: [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref),
+[`ControlVariateMonteCarlo`](@ref)
 """
 abstract type MonteCarlo end
 
@@ -103,14 +105,16 @@ abstract type MonteCarlo end
 Monte Carlo simulation model for pricing options under the risk-neutral (Q) measure.
 
 Generates asset price paths using the risk-free rate as the drift and returns the
-discounted expected payoff. The path dynamics default to [`GeometricBrownianMotion`](@ref) but can be
-swapped for any [`AssetDynamics`](@ref) subtype.
+discounted expected payoff. The path dynamics default to [`GeometricBrownianMotion`](@ref)
+but can be swapped for any [`AssetDynamics`](@ref) subtype.
 
 # Fields
 - `steps::Int`: Number of time steps per simulation path
 - `reps::Int`: Number of simulation paths (replications)
-- `method::VarianceReductionMethod`: Variance reduction strategy (default: `PseudoRandom` with `NoPairing`)
-- `dynamics::AssetDynamics`: Asset price process (default: [`GeometricBrownianMotion`](@ref))
+- `method::VarianceReductionMethod`: Variance reduction strategy (default: `PseudoRandom`
+  with `NoPairing`)
+- `dynamics::AssetDynamics`: Asset price process (default:
+  [`GeometricBrownianMotion`](@ref))
 
 # Examples
 ```julia
@@ -126,7 +130,8 @@ jd  = JumpDiffusion(3.0, -0.02, 0.05)
 price(call, RiskNeutralMonteCarlo(100, 10_000, jd), data)
 ```
 
-See also: [`MonteCarlo`](@ref), [`GeometricBrownianMotion`](@ref), [`JumpDiffusion`](@ref), [`asset_paths`](@ref)
+See also: [`MonteCarlo`](@ref), [`GeometricBrownianMotion`](@ref), [`JumpDiffusion`](@ref),
+[`asset_paths`](@ref)
 """
 struct RiskNeutralMonteCarlo <: MonteCarlo
     steps::Int
@@ -136,13 +141,15 @@ struct RiskNeutralMonteCarlo <: MonteCarlo
 end
 
 RiskNeutralMonteCarlo(steps::Int, reps::Int) =
-    RiskNeutralMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), GeometricBrownianMotion())
+    RiskNeutralMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
+        GeometricBrownianMotion())
 
 RiskNeutralMonteCarlo(steps::Int, reps::Int, method::VarianceReductionMethod) =
     RiskNeutralMonteCarlo(steps, reps, method, GeometricBrownianMotion())
 
 RiskNeutralMonteCarlo(steps::Int, reps::Int, dynamics::AssetDynamics) =
-    RiskNeutralMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), dynamics)
+    RiskNeutralMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
+        dynamics)
 
 
 # Internal: generate n standard-normal draws using method.
@@ -169,8 +176,8 @@ apply_pairing(::Antithetic, draws) = [draws; -draws]
 Generate simulated asset price paths.
 
 Dispatches on `model.dynamics` to select the path generation model
-([`GeometricBrownianMotion`](@ref) or [`JumpDiffusion`](@ref)) and on `model.method` for variance
-reduction. Works with any [`MonteCarlo`](@ref) subtype.
+([`GeometricBrownianMotion`](@ref) or [`JumpDiffusion`](@ref)) and on `model.method` for
+variance reduction. Works with any [`MonteCarlo`](@ref) subtype.
 
 # Arguments
 - `model::MonteCarlo`: Simulation model (provides `steps`, `reps`, `method`, `dynamics`)
@@ -195,14 +202,15 @@ model = RiskNeutralMonteCarlo(252, 1_000, jd)
 paths = asset_paths(model, data.spot, data.rate, data.vol, 1.0)
 ```
 
-See also: [`GeometricBrownianMotion`](@ref), [`JumpDiffusion`](@ref), [`RiskNeutralMonteCarlo`](@ref)
+See also: [`GeometricBrownianMotion`](@ref), [`JumpDiffusion`](@ref),
+[`RiskNeutralMonteCarlo`](@ref)
 """
 asset_paths(model::MonteCarlo, spot, rate, vol, expiry) =
     asset_paths(model.method, model.dynamics, model, spot, rate, vol, expiry)
 
 # Geometric Brownian Motion path generation
-function asset_paths(method::VarianceReduction, ::GeometricBrownianMotion, model::MonteCarlo,
-        spot, rate, vol, expiry)
+function asset_paths(method::VarianceReduction, ::GeometricBrownianMotion,
+        model::MonteCarlo, spot, rate, vol, expiry)
     (; steps, reps) = model
 
     dt = expiry / steps
@@ -307,7 +315,8 @@ data = MarketData(100.0, 0.05, 0.2, 0.0)
 price(CashOrNothingCall(100.0, 1.0, 1.0), RiskNeutralMonteCarlo(1, 10_000), data)
 ```
 
-See also: [`BinaryOption`](@ref), [`RiskNeutralMonteCarlo`](@ref), [`SimulationResult`](@ref)
+See also: [`BinaryOption`](@ref), [`RiskNeutralMonteCarlo`](@ref),
+[`SimulationResult`](@ref)
 """
 function price(option::BinaryOption, model::RiskNeutralMonteCarlo, data::MarketData)
     (; expiry) = option

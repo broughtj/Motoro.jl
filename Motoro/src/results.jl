@@ -22,11 +22,13 @@ end
 """
     SimulationResult(price, std)
 
-Result from a simulation-based pricing model (e.g., [`RiskNeutralMonteCarlo`](@ref), [`HedgedMonteCarlo`](@ref)).
+Result from a simulation-based pricing model (e.g., [`RiskNeutralMonteCarlo`](@ref),
+[`HedgedMonteCarlo`](@ref)).
 
 # Fields
 - `price::Float64`: Estimated option price (discounted mean payoff)
-- `std::Float64`: Standard error of the price estimate (standard deviation of payoffs divided by √reps)
+- `std::Float64`: Standard error of the price estimate (standard deviation of
+  payoffs divided by √reps)
 """
 struct SimulationResult <: PricingResult
     price::Float64
