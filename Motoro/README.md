@@ -380,6 +380,11 @@ payoff(FloatingStrikeLookbackCall(1.0), path)        # 105.0 - 95.0 = 10.0
 payoff(FloatingPriceLookbackPut(100.0, 1.0), path)   # max(0, 100.0 - 95.0) = 5.0
 ```
 
+## Code Style
+
+All source files follow [BlueStyle](https://github.com/JuliaDiff/BlueStyle) with a
+92-character line limit.
+
 ## Dependencies
 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl)
