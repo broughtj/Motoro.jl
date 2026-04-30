@@ -43,18 +43,29 @@ struct HedgedMonteCarlo{S<:HedgeStrategy} <: MonteCarlo
     dynamics::AssetDynamics
 end
 
-HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy) =
-    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
-        strategy, GeometricBrownianMotion())
+function HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy)
+    return HedgedMonteCarlo(
+        steps,
+        reps,
+        VarianceReduction(PseudoRandom(), NoPairing()),
+        strategy,
+        GeometricBrownianMotion(),
+    )
+end
 
-HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy,
-        method::VarianceReductionMethod) =
-    HedgedMonteCarlo(steps, reps, method, strategy, GeometricBrownianMotion())
+function HedgedMonteCarlo(
+    steps::Int, reps::Int, strategy::HedgeStrategy, method::VarianceReductionMethod
+)
+    return HedgedMonteCarlo(steps, reps, method, strategy, GeometricBrownianMotion())
+end
 
-HedgedMonteCarlo(steps::Int, reps::Int, strategy::HedgeStrategy, dynamics::AssetDynamics) =
-    HedgedMonteCarlo(steps, reps, VarianceReduction(PseudoRandom(), NoPairing()),
-        strategy, dynamics)
-
+function HedgedMonteCarlo(
+    steps::Int, reps::Int, strategy::HedgeStrategy, dynamics::AssetDynamics
+)
+    return HedgedMonteCarlo(
+        steps, reps, VarianceReduction(PseudoRandom(), NoPairing()), strategy, dynamics
+    )
+end
 
 """
     StopLoss(mu) <: HedgeStrategy
@@ -79,7 +90,6 @@ See also: [`HedgeStrategy`](@ref), [`HedgedMonteCarlo`](@ref)
 struct StopLoss <: HedgeStrategy
     mu::Float64
 end
-
 
 """
     price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::MarketData)
@@ -152,7 +162,6 @@ function price(option::EuropeanOption, model::HedgedMonteCarlo{StopLoss}, data::
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
 
-
 """
     DeltaHedge(mu) <: HedgeStrategy
 
@@ -180,7 +189,6 @@ See also: [`HedgeStrategy`](@ref), [`HedgedMonteCarlo`](@ref), [`StopLoss`](@ref
 struct DeltaHedge <: HedgeStrategy
     mu::Float64
 end
-
 
 """
     price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::MarketData)
@@ -250,13 +258,13 @@ function price(option::EuropeanCall, model::HedgedMonteCarlo{DeltaHedge}, data::
     return SimulationResult(mean(cost), std(cost) / sqrt(reps))
 end
 
-
 # Internal: apply the stationary bootstrap resampling scheme to `indices` in-place.
 # On each step, the block continues (indices[i] = indices[i-1] + 1) with
 # probability 1-p, or a new block starts at a fresh random index with
 # probability p. Indices wrap around at n_hist to stay within the history.
-function _stationary_bootstrap_sample!(indices::Vector{Int}, u::Vector{Float64},
-        p::Float64, n_hist::Int)
+function _stationary_bootstrap_sample!(
+    indices::Vector{Int}, u::Vector{Float64}, p::Float64, n_hist::Int
+)
     for i in 2:length(indices)
         if u[i] > p
             indices[i] = indices[i - 1] + 1
@@ -267,7 +275,6 @@ function _stationary_bootstrap_sample!(indices::Vector{Int}, u::Vector{Float64},
     end
     return indices
 end
-
 
 """
     asset_paths(method, dynamics::StationaryBootstrap, model::HedgedMonteCarlo, ...)
@@ -282,8 +289,15 @@ resampling.
 
 See also: [`StationaryBootstrap`](@ref), [`HistoricalData`](@ref)
 """
-function asset_paths(method::VarianceReduction, bs::StationaryBootstrap,
-        model::HedgedMonteCarlo, spot, rate, vol, expiry)
+function asset_paths(
+    method::VarianceReduction,
+    bs::StationaryBootstrap,
+    model::HedgedMonteCarlo,
+    spot,
+    rate,
+    vol,
+    expiry,
+)
     (; steps, reps) = model
     returns = bs.data.returns
     n_hist = length(returns)
