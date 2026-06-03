@@ -32,17 +32,18 @@ println("BSM reference: $(round(bsm, digits=4))")
 # log-returns; the initial spot level does not affect the returns.
 
 sigma = data.vol
-dt    = 1.0 / 252
 
-n_hist = 252 * 5
-hist_prices = Vector{Float64}(undef, n_hist + 1)
-hist_prices[1] = data.spot
-for t in 2:(n_hist + 1)
-    hist_prices[t] = hist_prices[t - 1] *
-        exp((mu - 0.5 * sigma^2) * dt + sigma * sqrt(dt) * randn())
-end
+# Generate the synthetic history with the package's own GBM path generator.
+# `asset_paths` runs on any `MonteCarlo` model and treats its drift argument as
+# whatever measure you feed it — here the real-world `mu`. One path (`reps = 1`)
+# of `n_years` daily steps; with `expiry = n_years` the internal step is 1/252.
 
-hist = HistoricalData(log_returns(hist_prices))
+n_years   = 5
+n_hist    = 252 * n_years
+generator = RiskNeutralMonteCarlo(n_hist, 1)
+hist_path = asset_paths(generator, data.spot, mu, sigma, float(n_years))[1, :]
+
+hist = HistoricalData(log_returns(hist_path))
 println("History: $(length(hist.returns)) daily returns ($(length(hist.returns) ÷ 252) years)")
 
 # ## Bootstrap vs parametric GBM delta hedge
@@ -94,17 +95,14 @@ end
 println("\nEffect of history length (steps=252, reps=10_000, block_length=20):")
 println("  BSM reference: $(round(bsm, digits=4))")
 let
-    for n_years in [1, 2, 5, 10, 20]
-        n = 252 * n_years
-        p = Vector{Float64}(undef, n + 1)
-        p[1] = data.spot
-        for t in 2:(n + 1)
-            p[t] = p[t - 1] * exp((mu - 0.5 * sigma^2) * dt + sigma * sqrt(dt) * randn())
-        end
+    for years in [1, 2, 5, 10, 20]
+        n = 252 * years
+        gen = RiskNeutralMonteCarlo(n, 1)
+        p = asset_paths(gen, data.spot, mu, sigma, float(years))[1, :]
         h = HistoricalData(log_returns(p))
         r = price(call, HedgedMonteCarlo(252, 10_000, DeltaHedge(mu),
             StationaryBootstrap(h, 20)), data)
-        println("  years=$(lpad(n_years, 2)):  $(round(r.price, digits=4))  ± $(round(r.std, digits=4))")
+        println("  years=$(lpad(years, 2)):  $(round(r.price, digits=4))  ± $(round(r.std, digits=4))")
     end
 end
 
