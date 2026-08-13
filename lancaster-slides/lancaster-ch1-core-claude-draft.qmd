@@ -1,0 +1,1072 @@
+---
+# Render:  quarto render lancaster-ch1-core.qmd  ->  lancaster-ch1-core.pdf
+# Needs:   quarto >= 1.4 and LaTeX with beamer + the metropolis theme
+# Companion: lancaster-ch1-extended.qmd holds the full detail, quotes, and derivations
+title: "The Bayesian Algorithm"
+subtitle: "Lancaster, Ch. 1 --- core deck"
+author: "Caleb Dissel"
+date: today
+institute: "*An Introduction to Modern Bayesian Econometrics* (2004) --- reading group draft"
+format:
+  beamer:
+    theme: metropolis
+    aspectratio: 169
+    fontsize: 11pt
+    slide-level: 2
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{etoolbox}
+        \AtBeginEnvironment{Shaded}{\footnotesize}
+        \AtBeginEnvironment{longtable}{\small}
+        \setbeamertemplate{footline}[frame number]
+        \newcommand{\socratic}[1]{\begin{alertblock}{Ask the room}#1\end{alertblock}}
+        \newcommand{\key}[1]{\begin{block}{The one thing}#1\end{block}}
+---
+
+## The whole book, in five steps
+
+\begin{block}{ALGORITHM 1.1 --- Bayes}
+\begin{enumerate}
+\item Write down a \textbf{likelihood}.
+\item Write down a \textbf{prior}.
+\item Put the data in.
+\item Turn the crank --- Bayes' theorem.
+\item \textbf{Criticize your model.}
+\end{enumerate}
+\end{block}
+
+\vspace{0.5em}
+
+Steps 1--4 are Chapter 1. Step 5 is Chapter 2.
+
+Everything after that --- regression, MCMC, panels, time series --- is these same five steps on
+harder models.
+
+## Two sessions
+
+**Session 1 --- the machine**
+
+Appendix 1 $\cdot$ Bayes' theorem $\cdot$ the algorithm $\cdot$ the likelihood $\cdot$
+exchangeability $\cdot$ prior $\cdot$ posterior
+
+\vspace{0.6em}
+
+**Session 2 --- what you do with it**
+
+Monte Carlo and ABC $\cdot$ prediction $\cdot$ decisions and Wald $\cdot$ value at risk
+
+\vspace{0.6em}
+
+Detail, quotes and derivations live in the extended deck.
+
+# I. What are we even doing?
+
+## An econometric analysis
+
+**The confrontation of an economic model with evidence.**
+
+\vspace{0.6em}
+
+It asks two questions:
+
+1. **Is the model consistent with the evidence?** $\to$ Chapter 2
+2. **If so, which structures are probable?** $\to$ Chapter 1
+
+\vspace{0.6em}
+
+In practice we ask them backwards: assume it fits, then find the probable structures.
+
+## Econometrics is not statistics
+
+:::: {.columns}
+::: {.column width="47%"}
+**Statistics**
+
+Reduce a pile of numbers to something a mind can hold.
+
+Data first.
+:::
+::: {.column width="47%"}
+**Econometrics**
+
+Explain the behavior of **agents** in markets.
+
+Data second.
+:::
+::::
+
+\vspace{0.7em}
+
+That is why our models have equilibrium, optimization, and agents who know things we don't ---
+and why our parameters mean something.
+
+\vspace{0.5em}
+
+\socratic{An elasticity of substitution exists only inside a theory.
+\textbf{In what sense can such a thing be \emph{true}?}}
+
+# II. Appendix 1 --- the conversion manual
+
+## The frequentist picture
+
+Everyone here was trained this way. Appendix 1 is not an argument --- **it is a map of what changes.**
+
+\vspace{0.5em}
+
+- There is a **population**. Your data are a **sample** from it.
+- There is a **true** $\theta_0$.
+- You pick an **estimator** --- a formula.
+- You judge that formula by how it behaves **over samples you never saw**.
+
+\vspace{0.6em}
+
+Bias, variance, MSE, power, consistency: **every one is an average over imaginary data.**
+
+## The Bayesian picture
+
+- You have **beliefs** about $\theta$, and data in hand.
+- Bayes' theorem tells you how the data **change** the beliefs.
+- You report the resulting distribution.
+
+\vspace{0.8em}
+
+\key{Frequentist inference conditions on a $\theta$ you never learn.\\
+Bayesian inference conditions on the data you actually have.}
+
+## What actually changes
+
+\begin{block}{Four of Lancaster's eight}
+\begin{enumerate}
+\item Bayes \textbf{demands more}: a full likelihood, not just a moment condition.
+\item There is only \textbf{one estimator} --- the posterior. Model and data imply it.
+\item Bias, MSE, efficiency are \textbf{irrelevant} --- including Gauss--Markov.
+\item Consistency asks what happens \textbf{with more data than you have}.
+\end{enumerate}
+\end{block}
+
+## The bus example
+
+200 Bay Area commuters. You toss a coin for each: bus or car.
+
+You end up with **97 bus, 103 car**.
+
+\vspace{0.6em}
+
+Now the frequentist must decide what to imagine repeating:
+
+- samples of size 97 and 103?
+- or 200 coin tosses, with the counts moving around?
+
+\vspace{0.5em}
+
+**The standard errors differ.** The Bayesian conditions on 97 and 103 and never notices.
+
+## Ask the room
+
+\socratic{
+Your standard errors changed because of a coin toss that has nothing to do with commuting.
+
+\vspace{0.4em}
+Cox \& Hinkley say: condition on what you actually saw.
+
+\vspace{0.4em}
+\textbf{Once you start conditioning, how far can you go before you have become a Bayesian?}
+}
+
+## Sometimes the numbers agree
+
+$n$ normal draws, known variance. Both camps report the same interval.
+
+:::: {.columns}
+::: {.column width="47%"}
+**Frequentist**
+
+"95% of intervals built this way would contain $\mu$."
+
+A claim about the **procedure**.
+:::
+::: {.column width="47%"}
+**Bayesian**
+
+"The probability that $\mu$ is in here is 0.95."
+
+A claim about **$\mu$**.
+:::
+::::
+
+\vspace{0.6em}
+
+Same numbers. Only one of them is the sentence you actually wanted to say.
+
+# III. The algorithm
+
+## Bayes' theorem
+
+$$p(\theta \mid y) \;\propto\; p(y \mid \theta)\;p(\theta)$$
+
+\vspace{0.5em}
+
+**Posterior $\propto$ likelihood $\times$ prior.**
+
+\vspace{0.8em}
+
+Nobody disputes the theorem. The disputes are about two other things:
+
+- what probability **means**
+- what it may be **applied to**
+
+## Probability means degree of belief
+
+The larger $P(A)$, the more strongly you believe $A$.
+
+\vspace{0.6em}
+
+That is what lets an analysis end with:
+
+> "In the light of the evidence, theory A is very unlikely and theory B is quite probable."
+
+\vspace{0.6em}
+
+**In traditional econometrics that sentence is illegal.** Theories are true or false, not probable.
+
+## What may have a probability?
+
+Frequentists: only things embedded in a repeatable sequence.
+
+\vspace{0.6em}
+
+Lancaster: anything you have beliefs about.
+
+- the US was in recession in 1983
+- the moon is made of green cheese
+- the economy is in general equilibrium
+
+\vspace{0.6em}
+
+There is no sequence of worlds in some of which 1983 was a recession.
+
+## Evidence moving a belief
+
+Two structures. You think each is 50/50.
+
+The data are **unlikely** under structure 1 ($0.1$), **likely** under structure 2 ($0.6$).
+
+\vspace{0.6em}
+
+$$\text{prior odds } 1:1 \quad\longrightarrow\quad \textbf{posterior odds } 6:1$$
+
+\vspace{0.6em}
+
+The evidence entered as a **ratio**, $0.6/0.1$. Nothing else about the data mattered.
+
+## Two ways evidence fails to move you
+
+\begin{block}{You were dogmatic}
+If you gave a theory probability zero, no data can ever raise it.\\
+\textbf{"If you gave no credence at all to a theory you will never learn that it is right."}
+\end{block}
+
+\begin{block}{The data can't tell them apart}
+If both structures make the data equally probable, the data say nothing.
+\end{block}
+
+\vspace{0.4em}
+
+Make the second one true for *every possible dataset* and you have **non-identification**.
+
+## Parameters and data
+
+\begin{block}{The only distinction that matters}
+A \textbf{parameter} is unknown to you before the data \emph{and after}.\\
+\textbf{Data} are unknown before and \textbf{known after}.
+\end{block}
+
+\vspace{0.6em}
+
+That's it. So a parameter can be a constant, a whole theory, or an unknown function.
+
+\vspace{0.5em}
+
+And "random" vs. "fixed" stops meaning anything: **everything unknown gets a distribution.**
+
+## The algorithm again
+
+\begin{block}{ALGORITHM 1.1}
+\textbf{1.} likelihood \quad \textbf{2.} prior \quad \textbf{3.} data \quad
+\textbf{4.} Bayes' theorem \quad \textbf{5.} criticize
+\end{block}
+
+\vspace{0.6em}
+
+Steps 1--4 are mechanical once you commit.
+
+\vspace{0.4em}
+
+**Step 5 is the only step where the world gets to talk back.**
+
+\vspace{0.6em}
+
+Which is why Chapter 2 is not an appendix to Chapter 1. It is the other half.
+
+# IV. The likelihood --- the information transfer function
+
+## One object, two names
+
+$$p(y \mid \theta) \qquad\text{vs.}\qquad \ell(\theta ; y)$$
+
+- Before the data: a **distribution over data**, given $\theta$.
+- After the data: a **function of $\theta$**, with your data baked in.
+
+\vspace{0.6em}
+
+Note the semicolon. It is **not** a probability distribution for $\theta$.
+
+\vspace{0.5em}
+
+\key{This is the only door the data come through. Prior in, posterior out --- the likelihood is
+what does the transferring.}
+
+## Choosing a likelihood commits you
+
+It must:
+
+1. **express your economic model**
+2. let you say which parameter values are probable
+3. **let the data prove you wrong**
+
+\vspace{0.8em}
+
+\socratic{
+Write down the likelihood for your current project.
+
+\vspace{0.3em}
+Now write down a dataset that would embarrass it.
+
+\vspace{0.3em}
+\textbf{If you can't, what have you actually assumed?}
+}
+
+## The likelihood principle
+
+Two researchers. Same coin. Same prior.
+
+:::: {.columns}
+::: {.column width="47%"}
+**A** decides to do 20 trials.
+
+Gets 7 successes.
+:::
+::: {.column width="47%"}
+**B** decides to stop at 7 successes.
+
+The 7th lands on trial 20.
+:::
+::::
+
+\vspace{0.6em}
+
+Different experiments, different distributions --- **same likelihood, up to a constant.**
+
+\vspace{0.4em}
+
+So: **same posterior, same inference.**
+
+## Which means the stopping rule is irrelevant
+
+It does not matter whether you planned 20 trials, planned to stop at 7 successes, or just got
+bored and quit.
+
+\vspace{0.6em}
+
+The frequentist answer **depends on what was in the researcher's head**.
+
+\vspace{0.8em}
+
+\socratic{
+Would you throw away unrepeatable data because you couldn't find out what someone intended when
+they started?
+}
+
+## This is what converted Savage
+
+Savage spent the 1950s trying to rebuild statistics on Wald's foundations.
+
+\vspace{0.5em}
+
+The project failed --- publicly, in his own words.
+
+\vspace{0.6em}
+
+He said his conversion to Bayesianism came from **discovering the likelihood principle.**
+
+\vspace{0.5em}
+
+The idea that shocks a first-year class is the one that turned the most careful frequentist mind
+of the era into *"we radical Bayesians."*
+
+# V. Exchangeability
+
+## The problem with "iid"
+
+Every model starts with *"$Y_1,\dots,Y_n$ are independent and identically distributed."*
+
+\vspace{0.6em}
+
+But that sentence implies a **machine out there** producing draws --- probability with an
+objective existence.
+
+\vspace{0.6em}
+
+If probability is your degree of belief, what is that sentence even saying?
+
+## Exchangeability
+
+\begin{block}{Definition 1.4}
+Your beliefs are \textbf{exchangeable} if reordering the observations doesn't change your joint
+distribution.
+\end{block}
+
+\vspace{0.6em}
+
+- iid $\Rightarrow$ exchangeable. **Not the reverse.**
+- It is a **judgement**, and it is yours.
+
+\vspace{0.5em}
+
+Notice the grammar: the coin isn't exchangeable. **Your beliefs are.**
+
+## de Finetti's theorem
+
+If your beliefs about a binary sequence are exchangeable, then
+
+$$p(y_1,\dots,y_n) \;=\; \int \theta^{\,s}(1-\theta)^{\,n-s}\,dF(\theta)$$
+
+\vspace{0.5em}
+
+Look at what's on the right: **a likelihood, integrated against a prior.**
+
+\vspace{0.7em}
+
+\key{You never needed to assume iid. Judge your beliefs symmetric, and a likelihood \emph{and a
+prior} fall out whether you wanted them or not.}
+
+## Ask the room
+
+\socratic{
+Are daily returns on SPY exchangeable in your beliefs?
+
+\vspace{0.4em}
+If a 2008 observation and a 2017 observation were swapped, would anything change?
+
+\vspace{0.5em}
+\textbf{If yes --- you have just signed up to model the dependence.}
+}
+
+# VI. The prior
+
+## It's yours, and you don't have to believe it
+
+You should try other priors on purpose: *"if I had believed this, what would I now believe?"*
+
+That's **sensitivity analysis**.
+
+\vspace{0.6em}
+
+You may even look at the data first. Bayes' theorem never told you what to believe --- only how
+beliefs **change**.
+
+## Two rules of thumb
+
+\begin{block}{Encompass your audience}
+A prior nobody shares makes your paper uninteresting: \emph{"So what, I don't believe A."}\\
+Use one that isn't sharply inconsistent with any reasonable belief.
+\end{block}
+
+\begin{block}{Never assign zero}
+Zero times anything is zero. You can never learn that the truth was there.
+\end{block}
+
+## Conjugacy is a convenience
+
+If the prior and posterior are in the same family, you never do an integral.
+
+Bernoulli likelihood $\times$ beta prior $\to$ beta posterior:
+
+```julia
+using Distributions
+prior     = Beta(1, 1)                 # uniform: 0 prior successes, 0 failures
+n, s      = 20, 7                      # 20 trials, 7 successes
+posterior = Beta(1 + s, 1 + n - s)     # just add them up
+mean(posterior), std(posterior)        # 0.3636, 0.1003
+```
+
+\vspace{0.3em}
+
+**Updating is counting.** The prior is a pile of imaginary earlier trials.
+
+\vspace{0.3em}
+
+Conjugacy mattered when we did this by hand. Now it's a nicety.
+
+## Where the prior stops mattering
+
+The likelihood is essentially **zero almost everywhere**.
+
+\vspace{0.5em}
+
+So your prior gets multiplied by zero almost everywhere. What you believed out there is
+irrelevant.
+
+\vspace{0.7em}
+
+\key{Least squares and maximum likelihood are flat-prior Bayes.\\
+So what exactly were you objecting to?}
+
+# VII. The posterior
+
+## Reporting it
+
+1. **Draw it.** For a scalar --- or a scalar function of a vector --- nothing beats the picture.
+2. **Report moments.** Posterior mean and SD. Looks like your usual table.
+3. **Report an HPD interval.** The shortest interval holding 95% of your belief.
+4. **Report marginals.** Integrate the rest out.
+
+\vspace{0.6em}
+
+Only #4 is hard. Part VIII is about that.
+
+## The sentence you are allowed to say
+
+:::: {.columns}
+::: {.column width="47%"}
+**Confidence interval**
+
+"If I repeated this procedure many times, 95% of the intervals I'd build would cover the true
+value."
+:::
+::: {.column width="47%"}
+**HPD interval**
+
+"The probability that $\rho$ is between 0.94 and 1.08 is 0.95."
+
+\vspace{0.4em}
+*It's as simple as that.*
+:::
+::::
+
+\vspace{0.6em}
+
+Every student who has ever misinterpreted a confidence interval was reaching for the right-hand
+sentence.
+
+## Data wins in the end
+
+The log posterior is the log likelihood plus the log prior.
+
+\vspace{0.5em}
+
+Data accumulate; the likelihood term grows. **The prior term just sits there.**
+
+\vspace{0.7em}
+
+Three very different priors, 5 observations: still visibly different.
+
+Same three priors, 20 observations: nearly identical.
+
+\vspace{0.6em}
+
+Two honest people are dragged into agreement by evidence --- **as long as neither was dogmatic,
+and both agree on the likelihood.**
+
+## Sampling the posterior
+
+Stop trying to do the integrals. **Draw from the posterior instead.**
+
+One row per draw, one column per parameter:
+
+- the whole matrix is the **joint** posterior
+- one column is a **marginal** --- to study $\theta_1$, *ignore the other column*
+- apply any function **row-wise** and you have that function's posterior
+
+\vspace{0.6em}
+
+\key{If you can sample a distribution, you can know it as precisely as you like. This is the whole
+modern shift --- computer power in place of hard mathematics.}
+
+## Which lets you answer the actual question
+
+Want the marginal effect, the elasticity, the probability an effect is positive?
+
+\vspace{0.5em}
+
+Compute it on **every draw**. You now have its posterior. Read off whatever you want.
+
+\vspace{0.8em}
+
+\socratic{
+"The posterior probability that this effect is positive is 0.94."
+
+\vspace{0.4em}
+\textbf{Write down the frequentist object that answers the same question.}
+
+\vspace{0.3em}
+Take your time.
+}
+
+# VIII. When there's no conjugate prior
+
+## Two integrals stand in the way
+
+$$p(y) = \int p(y\mid\theta)p(\theta)\,d\theta
+\qquad\qquad
+p(\theta_j \mid y) = \int p(\theta\mid y)\,d\theta_{-j}$$
+
+\vspace{0.5em}
+
+Conjugacy made the first one disappear --- you *recognized* the answer instead of computing it.
+
+\vspace{0.5em}
+
+The second is the marginalization. In general: hard.
+
+\vspace{0.6em}
+
+**Two escapes:** approximate the posterior, or **sample** it. Sampling wins --- with an
+approximation you can never check the error without doing the exact calculation you were avoiding.
+
+## Monte Carlo is integration by sampling
+
+Every posterior summary is an average of *something* over the posterior:
+
+| You want | Average this over the draws |
+|:--|:--|
+| posterior mean | $\theta$ |
+| $P(\theta > 0 \mid y)$ | 1 if $\theta>0$, else 0 |
+| a marginal effect | the effect, computed per draw |
+| **value at risk** | a quantile --- just sort them |
+
+\vspace{0.5em}
+
+**You never needed a formula for the posterior. You needed draws from it.**
+
+## ABC: when you can simulate but not evaluate
+
+You can run your model **forward** --- give it a $\theta$, it spits out plausible data.
+
+You cannot write down $p(y\mid\theta)$.
+
+\vspace{0.6em}
+
+This is normal life for:
+
+- structural and agent-based models
+- numerically-solved equilibrium models
+- anything with a simulator and no formula
+
+## ABC is the algorithm, run forward
+
+\begin{block}{Rejection ABC}
+\begin{enumerate}
+\item Draw $\theta$ from the \textbf{prior}.
+\item \textbf{Simulate} a dataset from it.
+\item Keep $\theta$ if the simulated data look like the real data.
+\end{enumerate}
+\end{block}
+
+```julia
+draws = Float64[]
+for m in 1:400_000
+    ts = rand(Uniform(0, 1))       # 1. from the prior
+    ys = rand(Binomial(20, ts))    # 2. SIMULATE (no pdf evaluated)
+    ys == 7 && push!(draws, ts)    # 3. keep it if it matches
+end
+mean(draws), std(draws)            # 0.3636, 0.1003  <- the exact answer
+```
+
+## Two things that just happened
+
+\begin{block}{It was exact, not approximate}
+The number of successes is \textbf{sufficient}, and we demanded an exact match. So we conditioned
+on everything the data contained --- and got the conjugate answer without ever writing a
+likelihood.
+\end{block}
+
+\begin{block}{The acceptance rate is $p(y)$}
+$1/21 = 4.76\%$ of draws survived. That fraction \emph{is} the marginal likelihood --- the
+denominator we spent all of Chapter 1 throwing away.
+\end{block}
+
+\vspace{0.3em}
+
+And Chapter 2 uses it to check models and choose between them.
+
+## What ABC costs you
+
+- **Sufficient statistics are rare.** Usually you pick summaries --- so you're answering a coarser
+  question than you asked.
+- **Loosening the match widens the posterior.** Report your tolerance or you're reporting an
+  estimate with no standard error.
+- **It doesn't scale** in the number of summaries.
+
+\vspace{0.6em}
+
+\socratic{
+ABC never evaluates a likelihood --- but you chose the summary statistic in advance.
+
+\vspace{0.3em}
+\textbf{Is that different from choosing a test statistic?}
+}
+
+# IX. Prediction
+
+## It was there the whole time
+
+The denominator we kept dropping:
+
+$$p(y) = \int p(y\mid\theta)\,p(\theta)\,d\theta$$
+
+\vspace{0.5em}
+
+Lancaster gives it two names: the **marginal** distribution of the data, and the **predictive**
+distribution of the data.
+
+\vspace{0.7em}
+
+\key{Writing down a likelihood and a prior \emph{is} predicting your data.\\
+Model criticism is just comparing that prediction to what showed up.}
+
+## Two predictive distributions
+
+\begin{block}{Prior predictive}
+What your data \textbf{should have looked like}, before you saw them.\\
+Basis of formal model checks.
+\end{block}
+
+\begin{block}{Posterior predictive}
+What \textbf{another draw} from your model should look like, now that you've seen the data.\\
+A forecast, or a replication of your own dataset.
+\end{block}
+
+\vspace{0.4em}
+
+$$p(\tilde y \mid y) = \int p(\tilde y \mid \theta)\,p(\theta\mid y)\,d\theta$$
+
+## How to predict --- Algorithm 2.5
+
+\begin{block}{Two steps, repeated}
+\begin{enumerate}
+\item Draw a $\theta$ from the posterior.
+\item Draw a $\tilde y$ from the model at that $\theta$.
+\end{enumerate}
+\end{block}
+
+\vspace{0.6em}
+
+**One $\theta$ per prediction.**
+
+\vspace{0.4em}
+
+Your uncertainty about the parameter and the world's randomness get compounded --- not stacked
+side by side, not reported separately.
+
+## The plug-in fallacy
+
+Standard practice: estimate $\hat\theta$, then predict as if it were correct.
+
+\vspace{0.7em}
+
+Lancaster: this **has no theoretical justification** except as an approximation --- and only when
+the posterior is tightly concentrated.
+
+\vspace{0.7em}
+
+**Plug-in prediction is always too confident.** It reports the world's variability and quietly
+drops yours.
+
+\vspace{0.5em}
+
+In the AR(1) example, the predictive precision is *always* less than the model's --- and it gets
+worse when you forecast from an extreme starting point.
+
+## Prediction is the primitive
+
+de Finetti, one more time:
+
+The thing you really have beliefs about is **the observables**.
+
+$\theta$ is a device for representing those beliefs compactly.
+
+\vspace{0.8em}
+
+\socratic{
+Which would you rather defend in a seminar --- your posterior for $\beta$, or your prediction for
+next quarter?
+
+\vspace{0.4em}
+\textbf{Which one can actually be checked?}
+
+\vspace{0.3em}
+So why do our tables report the other one?
+}
+
+# X. Decisions --- and Wald
+
+## Lancaster declines the decision frame
+
+Many writers treat inference as **decision making**. Economists like that: their agents optimize.
+
+\vspace{0.7em}
+
+Lancaster says no. The econometrician's job is **reporting**:
+
+> Draw the marginal of the object of interest, and leave it to others --- policy makers --- to
+> decide.
+
+## But loss functions are already there
+
+Given a **loss function**, the Bayes decision minimizes **expected loss over the posterior**.
+
+- squared error loss $\to$ report the posterior **mean**
+- absolute error $\to$ the **median**
+- 0--1 loss $\to$ the **mode**
+
+\vspace{0.7em}
+
+\key{The "estimate" you report is a statement about your loss function --- not about your beliefs.}
+
+## An example with teeth
+
+Data uniform on $0$ to $\theta$. Under squared error loss, the Bayes decision is:
+
+**take the largest observation and nudge it up.**
+
+\vspace{0.6em}
+
+Maximum likelihood reports the largest observation itself --- which is **too low for essentially
+every dataset that could ever occur.**
+
+\vspace{0.7em}
+
+The posterior didn't change between those two answers. Only the loss function did.
+
+## Wald: statistics *is* decision theory
+
+Marschak, 1946: von Neumann says *to be an economic man you must be a statistical man.* Wald was
+arguing the reverse.
+
+\vspace{0.6em}
+
+**Wald's statistical decision problem:** actions, states of the world, a **loss function**, and an
+experiment that costs something.
+
+\vspace{0.5em}
+
+A statistical answer should tell you **what to do**, not what to say. He called it *inductive
+behavior*.
+
+\vspace{0.5em}
+
+And since Nature's choice is unknown, act as if Nature were trying to hurt you --- **minimax**,
+statistics as a game.
+
+## The twist
+
+\begin{alertblock}{The complete class theorem (Wald, 1947)}
+For any non-Bayesian decision rule there is a \textbf{Bayesian} rule at least as good.
+
+\vspace{0.3em}
+The Bayesian rules are \emph{complete}.
+\end{alertblock}
+
+\vspace{0.6em}
+
+Wald proved it --- and then used priors "merely as mathematical tools," denying they meant
+anything.
+
+\vspace{0.5em}
+
+**The most rigorous frequentist decision theorist of the century proved you never need to be
+non-Bayesian, and declined to be a Bayesian.**
+
+## Discussion: econometrics vs. decision theory
+
+\small
+\begin{alertblock}{For the room}
+\begin{enumerate}
+\item Giocoli's paradox: we model our \textbf{agents} as Bayesians and do our own estimation as
+frequentists. Inconsistency, or division of labor?
+\item Lancaster's answer: emphasize both perspectives \textbf{"not because econometricians take
+decisions but because agents do."} Resolution or truce?
+\item "Just report the marginal" --- but a report has a length, a format, and things left out.
+Is that really free of a loss function?
+\item If a central bank or a risk committee will act on your number, are you still only reporting?
+\end{enumerate}
+\end{alertblock}
+
+# XI. Bridge to Chapter 2 --- value at risk
+
+## Where Chapter 2 goes
+
+- **2.1--2.2** How to check a model. QQ plots, thick tails, mixtures --- *i.e.* returns.
+- **2.3** Which beliefs the data can never check.
+- **2.4** Formal checks, via the **prior predictive**.
+- **2.5** **Posterior prediction.**
+- **2.6** Posterior odds, Bayes factors, model averaging.
+- **2.7** Enlarging the model --- constant variance $\to$ **ARCH**.
+
+\vspace{0.6em}
+
+Chapter 2 opens: **"If you don't criticize your results you can be sure that others will."**
+
+## VaR and ES are just facts about a distribution
+
+- **Value at risk:** a **quantile** of the loss distribution.
+- **Expected shortfall:** the **average loss beyond** that quantile.
+
+\vspace{0.8em}
+
+Neither is hard. The entire question is:
+
+\vspace{0.3em}
+
+\key{\emph{Which} distribution?\\
+The model at your estimate --- or the posterior predictive?}
+
+## Two sources of uncertainty
+
+$$p(\tilde r \mid y) \;=\; \int
+\underbrace{p(\tilde r\mid\theta)}_{\text{tomorrow's shock}}\;
+\underbrace{p(\theta\mid y)}_{\text{your ignorance}}\;d\theta$$
+
+\vspace{0.6em}
+
+Plug-in keeps the first and drops the second.
+
+\vspace{0.6em}
+
+Do it properly for normal returns and the predictive distribution comes out **Student-$t$**, not
+normal.
+
+\vspace{0.4em}
+
+\key{Some of the fat tail in your risk model isn't the market. It's you, not knowing $\theta$.}
+
+## How much does plug-in understate the risk?
+
+Tail multipliers, in units of $s$:
+
+| $n$ | level | VaR plug-in | VaR predictive | ES plug-in | ES predictive |
+|--:|--:|--:|--:|--:|--:|
+| 25 | 1% | 2.33 | **2.54** | 2.67 | **2.98** |
+| 60 | 1% | 2.33 | **2.41** | 2.67 | **2.79** |
+| 250 | 1% | 2.33 | **2.35** | 2.67 | **2.69** |
+
+\vspace{0.4em}
+
+Biggest correction exactly where risk management is hardest: **short samples, deep tails.**
+
+\vspace{0.3em}
+
+And ES is corrected more than VaR.
+
+## Predictive VaR in three lines
+
+```julia
+# draw parameters from the posterior, then returns from the model
+sigma2 = nu * s2 ./ rand(Chisq(nu), M)            # step 1
+mu     = rbar .+ sqrt.(sigma2 ./ n) .* randn(M)
+rtilde = mu .+ sqrt.(sigma2) .* randn(M)          # step 2
+
+q   = quantile(rtilde, 0.01)
+VaR = -q
+ES  = -mean(rtilde[rtilde .<= q])
+```
+
+\vspace{0.3em}
+
+Same two steps as Algorithm 2.5 --- **and this works when the model is a GARCH, a jump diffusion,
+or a simulator you can only run forward.**
+
+## VaR itself has a posterior
+
+:::: {.columns}
+::: {.column width="47%"}
+**Predictive VaR** --- one number.
+
+Your uncertainty is already averaged in. This is what you hold capital against.
+:::
+::: {.column width="47%"}
+**Posterior of VaR** --- a whole distribution.
+
+VaR is a function of $\theta$, so compute it on every draw.
+:::
+::::
+
+\vspace{0.6em}
+
+60 days of returns, 1% level: point estimate **0.0247**, but the posterior says
+
+$$[\,0.0205,\; 0.0304\,]$$
+
+**Your VaR is known to about $\pm 20\%$.** The report shows three decimals and no interval.
+
+## Ask the room
+
+\socratic{
+\begin{enumerate}
+\item Which number does a capital requirement need --- and which does a risk \emph{committee} need?
+\item Backtesting counts exceedances over many days. That is a repeated-sampling check on a
+Bayesian number. Incoherent, or exactly right?
+\item Expected shortfall is an \textbf{expected loss}. That is Wald's risk function wearing a Basel
+hat. \textbf{Did the regulators become Bayesians, or Waldians?}
+\end{enumerate}
+}
+
+## One last thread
+
+Are returns exchangeable? **No** --- 2008 and 2017 are not swappable.
+
+\vspace{0.6em}
+
+So you model the dependence: that's ARCH, GARCH, stochastic volatility. Chapter 2's "enlarging the
+model."
+
+\vspace{0.6em}
+
+Then place your exchangeability judgement one level down --- on the **standardized** returns.
+
+\vspace{0.5em}
+
+**That judgement is checkable. And it is where the tail risk lives.**
+
+# Close
+
+## The chapter in one slide
+
+\begin{block}{ALGORITHM 1.1}
+\textbf{1.} likelihood \quad \textbf{2.} prior \quad \textbf{3.} data \quad
+\textbf{4.} Bayes' theorem \quad \textbf{5.} criticize
+\end{block}
+
+- **Likelihood** --- the only door the data come through.
+- **Exchangeability** --- judge your beliefs symmetric, and you already have a prior.
+- **Prior** --- yours, revisable, never dogmatic.
+- **Posterior** --- don't integrate it. **Sample it.**
+- **Prediction** --- the observables are what you can actually check.
+- **$p(y)$**, the thing we kept dropping, is the predictive distribution --- and it's where
+  Chapter 2, model choice, and every risk number live.
+
+## Take these with you
+
+1. Rewrite one table from a paper you admire as a Bayesian would report it.
+2. Write down a dataset that would embarrass your own model.
+3. Simulate the two stopping rules. Confirm the posteriors agree and the p-values don't.
+4. Decide the level at which you'd call your data exchangeable, and defend it.
+5. Compute plug-in VaR, predictive VaR, and the posterior of VaR --- then argue for the number
+   you'd hand a risk committee.
+
+\vspace{0.5em}
+
+**Sources:** Lancaster (2004) Ch. 1, Ch. 2, Appendix 1 $\cdot$ Giocoli (2013), *From Wald to Savage*
+$\cdot$ full detail in the extended deck.
